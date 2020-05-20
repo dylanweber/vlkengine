@@ -7,6 +7,9 @@ void application_init(struct Application *app) {
 	// Create window
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	app->window = glfwCreateWindow(800, 600, "Vulkan window", NULL, NULL);
+
+	uint32_t extensionCount = 0;
+	vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
 }
 
 bool application_loopcondition(struct Application *app) {

@@ -8,10 +8,7 @@ find_package(Python REQUIRED)
 set(SOURCES main.c
 			application.c
 			application.h
-			config.h
-			vulkan.c
-			vulkan.h
-			vk_platform.h)
+			config.h)
 
 add_executable(vlkengine ${SOURCES})
 
@@ -35,5 +32,6 @@ add_subdirectory(glfw)
 target_link_libraries(vlkengine glfw)
 
 # Vulkan linking
-include_directories(C:/VulkanSDK/1.2.135.0/Include)
-link_directories(C:/VulkanSDK/1.2.135.0/Lib)
+add_compile_definitions(GLFW_INCLUDE_VULKAN)
+
+target_link_libraries(vlkengine vulkan)
