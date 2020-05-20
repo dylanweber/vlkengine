@@ -13,10 +13,12 @@ void application_init(struct Application *app) {
 }
 
 bool application_loopcondition(struct Application *app) {
+	// Close only if GLFW says so
 	return !glfwWindowShouldClose(app->window);
 }
 
 void application_loopevent(struct Application *app) {
+	// Poll for events like keyboard & mouse
 	glfwPollEvents();
 }
 
