@@ -3,7 +3,7 @@ add_compile_options(-fdiagnostics-color=always)
 
 project(vlkengine)
 
-find_package(Python)
+find_package(Python REQUIRED)
 
 set(SOURCES main.c
 			application.c
@@ -33,3 +33,7 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(glfw)
 
 target_link_libraries(vlkengine glfw)
+
+# Vulkan linking
+include_directories(C:/VulkanSDK/1.2.135.0/Include)
+link_directories(C:/VulkanSDK/1.2.135.0/Lib)
