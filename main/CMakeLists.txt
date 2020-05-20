@@ -6,6 +6,8 @@ project(vlkengine)
 find_package(Python)
 
 set(SOURCES main.c
+			application.c
+			application.h
 			config.h
 			vulkan.c
 			vulkan.h

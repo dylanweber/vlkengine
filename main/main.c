@@ -1,3 +1,4 @@
+#include "application.h"
 #include "config.h"
 #include "glfw/glfw3.h"
 
@@ -7,20 +8,15 @@
 int main(int argc, char **argv) {
 	printf("VLK Engine - Version %s", VERSION_NUMBER);
 
-	// Initialize GLFW
-	glfwInit();
+	struct Application app = {0};
 
-	// Create window
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow *window = glfwCreateWindow(800, 600, "Vulkan window", NULL, NULL);
+	application_init(&app);
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+	while (application_loopcondition(&app)) {
+		application_loopevent(&app);
 	}
 
-	// End window & GLFW
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	application_close(&app);
 
 	return EXIT_SUCCESS;
 }
