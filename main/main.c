@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
-	printf("VLK Engine - Version %s", VERSION_NUMBER);
+	printf("VLK Engine - Version %s\n\n", VERSION_NUMBER);
 
 	struct Application app = {0};
 

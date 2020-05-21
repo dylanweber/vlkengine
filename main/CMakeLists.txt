@@ -8,6 +8,8 @@ find_package(Python REQUIRED)
 set(SOURCES main.c
 			application.c
 			application.h
+			engine_vulkan.c
+			engine_vulkan.h
 			config.h)
 
 add_executable(vlkengine ${SOURCES})
@@ -36,3 +38,6 @@ add_compile_definitions(GLFW_INCLUDE_VULKAN)
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(vlkengine ${Vulkan_LIBRARY})
+
+# Enable all warnings
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")

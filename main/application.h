@@ -7,6 +7,7 @@
 
 struct Application {
 	GLFWwindow *window;
+	VkInstance instance;
 };
 
 void application_init(struct Application *);

@@ -1,5 +1,5 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-#define BUILD_NUMBER 63
-#define VERSION_NUMBER "0.0.63"
+#define BUILD_NUMBER 87
+#define VERSION_NUMBER "0.0.87"
 #endif
