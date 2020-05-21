@@ -34,5 +34,5 @@ target_link_libraries(vlkengine glfw)
 # Vulkan linking
 add_compile_definitions(GLFW_INCLUDE_VULKAN)
 
-find_library(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED)
 target_link_libraries(vlkengine ${Vulkan_LIBRARY})
