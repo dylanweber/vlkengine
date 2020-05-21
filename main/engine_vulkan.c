@@ -1,5 +1,7 @@
 #include "engine_vulkan.h"
 
+const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
+
 bool vulkan_checkextensions() {
 	VkResult ret;
 

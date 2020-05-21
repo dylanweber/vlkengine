@@ -6,7 +6,11 @@
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
-	printf("VLK Engine - Version %s\n\n", VERSION_NUMBER);
+	printf("VLK Engine - Version %s\n", VERSION_NUMBER);
+	if (enable_validation_layers) {
+		printf("Validation layers enabled.\n");
+	}
+	printf("\n");
 
 	struct Application app = {0};
 

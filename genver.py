@@ -28,8 +28,14 @@ version = "%d.%d.%d" % (major, minor, num)
 	
 # write header file
 with open(versionh_path, "w+") as f:
+	f.write("#include <stdbool.h>\n")
 	f.write("#ifndef CONFIG_H\n")
 	f.write("#define CONFIG_H\n")
 	f.write("#define BUILD_NUMBER %d\n" % num)
 	f.write("#define VERSION_NUMBER \"%s\"\n" % version)
+	f.write("#ifndef NDEBUG\n")
+	f.write("\tstatic const bool enable_validation_layers = true;\n")
+	f.write("#else\n")
+	f.write("\tstatic const bool enable_validation_layers = false;\n")
+	f.write("#endif\n")
 	f.write("#endif\n")
