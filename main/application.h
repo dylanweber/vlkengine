@@ -9,6 +9,7 @@ struct Application {
 	GLFWwindow *window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debug_messenger;
+	VkPhysicalDevice physical_device;
 };
 
 void application_init(struct Application *);

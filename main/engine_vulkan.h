@@ -17,6 +17,7 @@ bool vulkan_createinstance(struct Application *);
 bool vulkan_checkvalidationlayers();
 void vulkan_close(struct Application *);
 bool vulkan_setupdebugmessenger(struct Application *);
+bool vulkan_pickdevice(struct Application *);
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT,
 													VkDebugUtilsMessageTypeFlagsEXT,

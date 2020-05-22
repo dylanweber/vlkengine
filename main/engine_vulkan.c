@@ -207,6 +207,66 @@ bool vulkan_setupdebugmessenger(struct Application *app) {
 	return ret == VK_SUCCESS;
 }
 
+bool vulkan_pickdevice(struct Application *app) {
+	VkResult ret;
+
+	// Get count of devices
+	uint32_t device_count = 0;
+	ret = vkEnumeratePhysicalDevices(app->instance, &device_count, NULL);
+	if (ret != VK_SUCCESS) {
+		perror("Failure enumerating physical devices.");
+	}
+
+	// Show error if none are found
+	if (device_count == 0) {
+		perror("Failed to find devices that support Vulkan.");
+	}
+
+	// Allocate array to store devices
+	VkPhysicalDevice *physical_devices = malloc(sizeof(*physical_devices) * device_count);
+	if (physical_devices == NULL) {
+		perror("Failure to allocate memory.");
+	}
+
+	// Get devices from Vulkan
+	vkEnumeratePhysicalDevices(app->instance, &device_count, physical_devices);
+
+	// Determine most suitable device
+	printf("Found GPUs:\n");
+	int i;
+	uint32_t score, max_score = 0;
+	VkPhysicalDeviceProperties device_properties;
+	VkPhysicalDeviceFeatures device_features;
+	for (i = 0; i < device_count; i++) {
+		vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
+		vkGetPhysicalDeviceFeatures(physical_devices[i], &device_features);
+
+		// Calculate score based on features
+		score = 0;
+
+		if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+			score += 1000;
+		}
+
+		score += device_properties.limits.maxImageDimension2D;
+
+		if (!device_features.geometryShader) {
+			score = 0;
+		}
+
+		// Pick best option
+		if (score > max_score) {
+			max_score = score;
+			app->physical_device = physical_devices[i];
+		}
+
+		// Print device name
+		printf("\t%s - Score: %d\n", device_properties.deviceName, score);
+	}
+
+	return true;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
 					 VkDebugUtilsMessageTypeFlagsEXT message_type,

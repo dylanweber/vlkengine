@@ -25,6 +25,9 @@ void application_init(struct Application *app) {
 	// Create validation layers (if enabled)
 	if (enable_validation_layers)
 		vulkan_setupdebugmessenger(app);
+
+	// Pick graphics device
+	vulkan_pickdevice(app);
 }
 
 bool application_loopcondition(struct Application *app) {
