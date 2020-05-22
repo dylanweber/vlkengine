@@ -3,6 +3,28 @@
 const char *validation_extensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
 
+bool vulkan_init(struct Application *app) {
+	bool ret = vulkan_checkextensions();
+	if (ret == false) {
+		perror("Failure to find all required extensions.\n");
+		return false;
+	} else {
+		printf("All required extensions found.\n");
+	}
+
+	// Create Vulkan instance
+	vulkan_createinstance(app);
+
+	// Create validation layers (if enabled)
+	if (enable_validation_layers)
+		vulkan_setupdebugmessenger(app);
+
+	// Pick graphics device
+	vulkan_pickdevice(app);
+
+	return true;
+}
+
 bool vulkan_checkextensions() {
 	VkResult ret;
 
@@ -151,7 +173,46 @@ bool vulkan_createinstance(struct Application *app) {
 	return true;
 }
 
-bool vulkan_getqueuefamilies(struct Application *app) {
+struct QueueFamilies vulkan_getqueuefamilies(VkPhysicalDevice physical_device) {
+	struct QueueFamilies indices = {0};
+
+	// Check queue count
+	uint32_t queue_family_count;
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
+
+	// Allocate family array
+	VkQueueFamilyProperties *queue_families = malloc(sizeof(*queue_families) * queue_family_count);
+	if (queue_families == NULL) {
+		perror("Failure to allocate memory.");
+		return indices;
+	}
+
+	// Get all queue family properties
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families);
+
+	// Select applicable graphics queue family
+	int i;
+	for (i = 0; i < queue_family_count; i++) {
+		if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			// Add graphics index to struct
+			indices.graphics_indices[indices.graphics_count] = i;
+			indices.graphics_count += 1;
+
+			// Check if queue families struct is complete
+			if (indices.graphics_count == GFX_INDICES_SIZE) {
+				break;
+			}
+		}
+	}
+
+	free(queue_families);
+	return indices;
+}
+
+bool vulkan_deviceissuitable(struct QueueFamilies indices) {
+	if (indices.graphics_count < 1) {
+		return false;
+	}
 
 	return true;
 }
@@ -242,12 +303,14 @@ bool vulkan_pickdevice(struct Application *app) {
 	uint32_t score, max_score = 0;
 	VkPhysicalDeviceProperties device_properties;
 	VkPhysicalDeviceFeatures device_features;
+	struct QueueFamilies indices;
 	for (i = 0; i < device_count; i++) {
 		vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 		vkGetPhysicalDeviceFeatures(physical_devices[i], &device_features);
 
 		// Calculate score based on features
 		score = 0;
+		memset(&indices, 0, sizeof(indices));
 
 		if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
 			score += 1000;
@@ -257,16 +320,21 @@ bool vulkan_pickdevice(struct Application *app) {
 
 		if (!device_features.geometryShader) {
 			score = 0;
+			continue;
 		}
 
+		indices = vulkan_getqueuefamilies(physical_devices[i]);
+
 		// Pick best option
-		if (score > max_score) {
+		if (score > max_score && vulkan_deviceissuitable(indices)) {
 			max_score = score;
 			app->vulkan_data->physical_device = physical_devices[i];
+			app->vulkan_data->indices = indices;
 		}
 
 		// Print device name
-		printf("\t%s - Score: %d\n", device_properties.deviceName, score);
+		printf("\t%s\n\t\tScore: %d\n\t\tSuitable: %s\n", device_properties.deviceName, score,
+			   (vulkan_deviceissuitable(app->vulkan_data->indices)) ? "true" : "false");
 	}
 
 	free(physical_devices);

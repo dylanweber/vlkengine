@@ -11,10 +11,11 @@
 #ifndef ENGINE_VULKAN_H
 #define ENGINE_VULKAN_H
 
-#define GFX_INDICES_SIZE 8
+#define GFX_INDICES_SIZE 1
 
 struct QueueFamilies {
-	uint32_t graphicsIndices[GFX_INDICES_SIZE];
+	uint32_t graphics_count;
+	uint32_t graphics_indices[GFX_INDICES_SIZE];
 };
 
 struct VulkanData {
@@ -24,10 +25,12 @@ struct VulkanData {
 	struct QueueFamilies indices;
 };
 
+bool vulkan_init(struct Application *);
 bool vulkan_checkextensions();
 void vulkan_getextensions(uint32_t *, const char ***);
 bool vulkan_createinstance(struct Application *);
-bool vulkan_findqueuefamilies(struct Application *);
+struct QueueFamilies vulkan_getqueuefamilies(VkPhysicalDevice);
+bool vulkan_deviceissuitable(struct QueueFamilies);
 bool vulkan_checkvalidationlayers();
 void vulkan_close(struct Application *);
 bool vulkan_setupdebugmessenger(struct Application *);

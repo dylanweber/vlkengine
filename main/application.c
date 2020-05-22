@@ -12,22 +12,10 @@ void application_init(struct Application *app) {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	app->window = glfwCreateWindow(800, 600, "Vulkan window", NULL, NULL);
 
-	ret = vulkan_checkextensions();
-	if (ret == false) {
-		perror("Failure to find all required extensions.\n");
-	} else {
-		printf("All required extensions found.\n");
+	ret = vulkan_init(app);
+	if (!ret) {
+		perror("Failed to initialize Vulkan.");
 	}
-
-	// Create Vulkan instance
-	vulkan_createinstance(app);
-
-	// Create validation layers (if enabled)
-	if (enable_validation_layers)
-		vulkan_setupdebugmessenger(app);
-
-	// Pick graphics device
-	vulkan_pickdevice(app);
 }
 
 bool application_loopcondition(struct Application *app) {
