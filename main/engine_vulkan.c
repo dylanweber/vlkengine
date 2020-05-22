@@ -264,6 +264,7 @@ bool vulkan_pickdevice(struct Application *app) {
 		printf("\t%s - Score: %d\n", device_properties.deviceName, score);
 	}
 
+	free(physical_devices);
 	return true;
 }
 
