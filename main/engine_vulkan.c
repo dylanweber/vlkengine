@@ -141,13 +141,18 @@ bool vulkan_createinstance(struct Application *app) {
 	}
 
 	// Create instance
-	VkResult ret = vkCreateInstance(&create_info, NULL, &app->instance);
+	VkResult ret = vkCreateInstance(&create_info, NULL, &app->vulkan_data->instance);
 	if (ret != VK_SUCCESS) {
 		perror("Failed to create Vulkan instance.");
 		return false;
 	}
 
 	free(extensions);
+	return true;
+}
+
+bool vulkan_getqueuefamilies(struct Application *app) {
+
 	return true;
 }
 
@@ -183,7 +188,7 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
-	vkDestroyInstance(app->instance, NULL);
+	vkDestroyInstance(app->vulkan_data->instance, NULL);
 }
 
 bool vulkan_setupdebugmessenger(struct Application *app) {
@@ -201,8 +206,8 @@ bool vulkan_setupdebugmessenger(struct Application *app) {
 	create_info.pfnUserCallback = vulkan_debugcallback;
 	create_info.pUserData = app;
 
-	VkResult ret =
-		vulkan_createdebugutilsmessenger(app->instance, &create_info, NULL, &app->debug_messenger);
+	VkResult ret = vulkan_createdebugutilsmessenger(app->vulkan_data->instance, &create_info, NULL,
+													&app->vulkan_data->debug_messenger);
 
 	return ret == VK_SUCCESS;
 }
@@ -212,7 +217,7 @@ bool vulkan_pickdevice(struct Application *app) {
 
 	// Get count of devices
 	uint32_t device_count = 0;
-	ret = vkEnumeratePhysicalDevices(app->instance, &device_count, NULL);
+	ret = vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, NULL);
 	if (ret != VK_SUCCESS) {
 		perror("Failure enumerating physical devices.");
 	}
@@ -229,7 +234,7 @@ bool vulkan_pickdevice(struct Application *app) {
 	}
 
 	// Get devices from Vulkan
-	vkEnumeratePhysicalDevices(app->instance, &device_count, physical_devices);
+	vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, physical_devices);
 
 	// Determine most suitable device
 	printf("Found GPUs:\n");
@@ -257,7 +262,7 @@ bool vulkan_pickdevice(struct Application *app) {
 		// Pick best option
 		if (score > max_score) {
 			max_score = score;
-			app->physical_device = physical_devices[i];
+			app->vulkan_data->physical_device = physical_devices[i];
 		}
 
 		// Print device name

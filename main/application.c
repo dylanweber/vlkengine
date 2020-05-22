@@ -43,7 +43,8 @@ void application_loopevent(struct Application *app) {
 void application_close(struct Application *app) {
 	// Destroy debug messenger
 	if (enable_validation_layers)
-		vulkan_destroydebugutilsmessenger(app->instance, app->debug_messenger, NULL);
+		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
+										  app->vulkan_data->debug_messenger, NULL);
 	// Close Vulkan instance
 	vulkan_close(app);
 	// End window & GLFW

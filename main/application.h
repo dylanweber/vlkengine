@@ -7,9 +7,7 @@
 
 struct Application {
 	GLFWwindow *window;
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debug_messenger;
-	VkPhysicalDevice physical_device;
+	struct VulkanData *vulkan_data;
 };
 
 void application_init(struct Application *);

@@ -1,5 +1,6 @@
 #include "application.h"
 #include "config.h"
+#include "engine_vulkan.h"
 #include "glfw/glfw3.h"
 
 #include <stdio.h>
@@ -12,7 +13,8 @@ int main(int argc, char **argv) {
 	}
 	printf("\n");
 
-	struct Application app = {0};
+	struct VulkanData vulkan_data = {0};
+	struct Application app = {.window = NULL, .vulkan_data = &vulkan_data};
 
 	application_init(&app);
 
