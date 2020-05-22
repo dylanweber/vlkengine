@@ -8,6 +8,7 @@
 struct Application {
 	GLFWwindow *window;
 	VkInstance instance;
+	VkDebugUtilsMessengerEXT debug_messenger;
 };
 
 void application_init(struct Application *);

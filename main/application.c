@@ -18,6 +18,13 @@ void application_init(struct Application *app) {
 	} else {
 		printf("All required extensions found.\n");
 	}
+
+	// Create Vulkan instance
+	vulkan_createinstance(app);
+
+	// Create validation layers (if enabled)
+	if (enable_validation_layers)
+		vulkan_setupdebugmessenger(app);
 }
 
 bool application_loopcondition(struct Application *app) {
@@ -31,6 +38,9 @@ void application_loopevent(struct Application *app) {
 }
 
 void application_close(struct Application *app) {
+	// Destroy debug messenger
+	if (enable_validation_layers)
+		vulkan_destroydebugutilsmessenger(app->instance, app->debug_messenger, NULL);
 	// Close Vulkan instance
 	vulkan_close(app);
 	// End window & GLFW

@@ -5,6 +5,10 @@ project(vlkengine)
 
 find_package(Python REQUIRED)
 
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(SOURCES main.c
 			application.c
 			application.h
@@ -41,3 +45,8 @@ target_link_libraries(vlkengine ${Vulkan_LIBRARY})
 
 # Enable all warnings
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+
+# -mwindows on release build
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mwindows")
+endif()
