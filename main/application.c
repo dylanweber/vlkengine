@@ -14,7 +14,7 @@ void application_init(struct Application *app) {
 
 	ret = vulkan_init(app);
 	if (!ret) {
-		perror("Failed to initialize Vulkan.");
+		fprintf(stderr, "Failed to initialize Vulkan.");
 	}
 }
 
