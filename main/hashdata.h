@@ -43,15 +43,21 @@ struct HashSet {
 	size_t size;
 };
 
-struct HashSetDefintion {
+struct HashSetDefinition {
 	char *key;
-	struct HashSetDefintion *next;
+	struct HashSetDefinition *next;
 };
 
 struct HashTable *hashtable_create(size_t size);
 void hashtable_destroy(struct HashTable *);
 bool hashtable_store(struct HashTable *, char *, union HashTableValue, enum HashTableType);
+bool hashtable_exists(struct HashTable *, char *);
 bool hashtable_access(struct HashTable *, char *, union HashTableValue *);
+
+struct HashSet *hashset_create(size_t size);
+void hashset_destroy(struct HashSet *);
+bool hashset_store(struct HashSet *, char *);
+bool hashset_exists(struct HashSet *, char *);
 
 uint32_t __djb2_a(char *);
 
