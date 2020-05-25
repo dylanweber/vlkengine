@@ -32,12 +32,29 @@ struct SwapChainSupportDetails {
 };
 
 struct VulkanData {
+	// Instance
 	VkInstance instance;
+
+	// Debug messenger for validation layers
 	VkDebugUtilsMessengerEXT debug_messenger;
+
+	// Physical and logical device
 	VkPhysicalDevice physical_device;
 	VkDevice device;
+
+	// Graphics and present queue
 	VkQueue graphics_queue, present_queue;
+
+	// Surface, swapchain, and associated variables
 	VkSurfaceKHR surface;
+	VkSwapchainKHR swapchain;
+	uint32_t swapchain_images_size;
+	VkImage *swapchain_images;
+	VkFormat swapchain_imageformat;
+	VkExtent2D swapchain_extent;
+	VkImageView *sc_imageviews;
+
+	// Structures required to creation
 	struct QueueFamilies qf_indices;
 	struct SwapChainSupportDetails sc_details;
 };
@@ -49,9 +66,7 @@ bool vulkan_createinstance(struct Application *);
 struct QueueFamilies vulkan_getqueuefamilies(struct Application *, VkPhysicalDevice);
 struct SwapChainSupportDetails vulkan_getswapchainsupport(struct Application *, VkPhysicalDevice);
 void vulkan_destroyswapchainsupport(struct SwapChainSupportDetails);
-bool vulkan_deviceissuitable(struct QueueFamilies, struct SwapChainSupportDetails,
-							 VkPhysicalDevice);
-bool vulkan_queuefamilyissuitable(struct QueueFamilies);
+bool vulkan_deviceissuitable(struct QueueFamilies, struct SwapChainSupportDetails);
 bool vulkan_devicesupportsextensions(VkPhysicalDevice);
 bool vulkan_compareextensions(VkExtensionProperties *, uint32_t, const char **, uint32_t);
 bool vulkan_checkvalidationlayers();
@@ -60,6 +75,10 @@ void vulkan_close(struct Application *);
 bool vulkan_setupdebugmessenger(struct Application *);
 bool vulkan_pickdevice(struct Application *);
 bool vulkan_createlogicaldevice(struct Application *);
+VkSurfaceFormatKHR vulkan_choosescsurfaceformat(struct SwapChainSupportDetails);
+VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
+VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
+bool vulkan_createswapchain(struct Application *);
 
 // Callbacks & wrappers
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT,

@@ -31,7 +31,13 @@ bool vulkan_init(struct Application *app) {
 	if (ret == false) {
 		return false;
 	}
+	// Create logical device
 	ret = vulkan_createlogicaldevice(app);
+	if (ret == false) {
+		return false;
+	}
+	// Create swapchain
+	ret = vulkan_createswapchain(app);
 	if (ret == false) {
 		return false;
 	}
@@ -148,6 +154,7 @@ bool vulkan_createinstance(struct Application *app) {
 	extensions = malloc(sizeof(*extensions) * extension_count);
 	if (extensions == NULL) {
 		fprintf(stderr, "Failure to allocate memory.");
+		return false;
 	}
 
 	vulkan_getextensions(&extension_count, &extensions);
@@ -227,7 +234,7 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 		}
 
 		// If struct is suitable, exit
-		if (vulkan_queuefamilyissuitable(indices)) {
+		if (indices.graphics_count > 0 && indices.present_count > 0) {
 			break;
 		}
 	}
@@ -277,36 +284,6 @@ struct SwapChainSupportDetails vulkan_getswapchainsupport(struct Application *ap
 void vulkan_destroyswapchainsupport(struct SwapChainSupportDetails details) {
 	free(details.formats);
 	free(details.present_modes);
-}
-
-inline bool vulkan_deviceissuitable(struct QueueFamilies indices,
-									struct SwapChainSupportDetails details,
-									VkPhysicalDevice physical_device) {
-	return vulkan_devicesupportsextensions(physical_device) &&
-		   vulkan_queuefamilyissuitable(indices) && details.format_count > 0 &&
-		   details.present_mode_count > 0;
-}
-
-bool vulkan_queuefamilyissuitable(struct QueueFamilies indices) {
-	if (indices.graphics_count < 1 || indices.present_count < 1) {
-		return false;
-	}
-
-	return true;
-}
-
-bool vulkan_devicesupportsextensions(VkPhysicalDevice physical_device) {
-	uint32_t extension_count;
-	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, NULL);
-
-	VkExtensionProperties *extensions = malloc(sizeof(*extensions) * extension_count);
-	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, extensions);
-
-	bool result = vulkan_compareextensions(extensions, extension_count, device_extensions,
-										   sizeof(device_extensions) / sizeof(*device_extensions));
-
-	free(extensions);
-	return result;
 }
 
 inline bool vulkan_compareextensions(VkExtensionProperties *extensions, uint32_t extensions_size,
@@ -372,6 +349,11 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
+	// Free array of swapchain images
+	free(app->vulkan_data->swapchain_images);
+
+	// Destroy swapchain
+	vkDestroySwapchainKHR(app->vulkan_data->device, app->vulkan_data->swapchain, NULL);
 	vulkan_destroyswapchainsupport(app->vulkan_data->sc_details);
 
 	// Destroy debug messenger
@@ -379,6 +361,7 @@ void vulkan_close(struct Application *app) {
 		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
 										  app->vulkan_data->debug_messenger, NULL);
 
+	// Destroy instance
 	vkDestroyDevice(app->vulkan_data->device, NULL);
 	vkDestroySurfaceKHR(app->vulkan_data->instance, app->vulkan_data->surface, NULL);
 	vkDestroyInstance(app->vulkan_data->instance, NULL);
@@ -469,7 +452,8 @@ bool vulkan_pickdevice(struct Application *app) {
 
 		score += device_properties.limits.maxImageDimension2D;
 
-		if (!device_features.geometryShader) {
+		if (!device_features.geometryShader ||
+			!vulkan_devicesupportsextensions(physical_devices[i])) {
 			score = 0;
 			continue;
 		}
@@ -478,10 +462,11 @@ bool vulkan_pickdevice(struct Application *app) {
 		details = vulkan_getswapchainsupport(app, physical_devices[i]);
 
 		// Pick best option
-		if (score > max_score && vulkan_deviceissuitable(indices, details, physical_devices[i])) {
+		if (score > max_score && vulkan_deviceissuitable(indices, details)) {
 			max_score = score;
 			app->vulkan_data->physical_device = physical_devices[i];
 			app->vulkan_data->qf_indices = indices;
+			app->vulkan_data->sc_details = details;
 		} else {
 			vulkan_destroyswapchainsupport(details);
 		}
@@ -494,6 +479,26 @@ bool vulkan_pickdevice(struct Application *app) {
 	free(physical_devices);
 
 	return app->vulkan_data->physical_device != NULL;
+}
+
+inline bool vulkan_deviceissuitable(struct QueueFamilies indices,
+									struct SwapChainSupportDetails details) {
+	return indices.graphics_count > 0 && indices.present_count > 0 && details.format_count > 0 &&
+		   details.present_mode_count > 0;
+}
+
+inline bool vulkan_devicesupportsextensions(VkPhysicalDevice physical_device) {
+	uint32_t extension_count;
+	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, NULL);
+
+	VkExtensionProperties *extensions = malloc(sizeof(*extensions) * extension_count);
+	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, extensions);
+
+	bool result = vulkan_compareextensions(extensions, extension_count, device_extensions,
+										   sizeof(device_extensions) / sizeof(*device_extensions));
+
+	free(extensions);
+	return result;
 }
 
 bool vulkan_createlogicaldevice(struct Application *app) {
@@ -576,6 +581,129 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	// Get present queue
 	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.present_indices[0], 0,
 					 &app->vulkan_data->present_queue);
+
+	return true;
+}
+
+VkSurfaceFormatKHR vulkan_choosescsurfaceformat(struct SwapChainSupportDetails sc_details) {
+	uint32_t i;
+	for (i = 0; i < sc_details.format_count; i++) {
+		if (sc_details.formats[i].format == VK_FORMAT_B8G8R8_SRGB &&
+			sc_details.formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			return sc_details.formats[i];
+		}
+	}
+
+	return sc_details.formats[0];
+}
+
+VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails sc_details) {
+	uint32_t i;
+	for (i = 0; i < sc_details.present_mode_count; i++) {
+		if (sc_details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+			return sc_details.present_modes[i];
+		}
+	}
+
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D vulkan_choosescextent(struct Application *app,
+								 struct SwapChainSupportDetails sc_details) {
+	if (sc_details.capabilities.currentExtent.width != UINT32_MAX) {
+		return sc_details.capabilities.currentExtent;
+	} else {
+		// Get current framebuffer size
+		int width, height;
+		glfwGetFramebufferSize(app->window, &width, &height);
+
+		VkExtent2D actual_extent = {.width = width, .height = height};
+
+		if (sc_details.capabilities.maxImageExtent.width < actual_extent.width) {
+			actual_extent.width = sc_details.capabilities.maxImageExtent.width;
+		}
+		if (sc_details.capabilities.minImageExtent.width > actual_extent.width) {
+			actual_extent.width = sc_details.capabilities.minImageExtent.width;
+		}
+
+		if (sc_details.capabilities.maxImageExtent.height < actual_extent.height) {
+			actual_extent.height = sc_details.capabilities.maxImageExtent.height;
+		}
+		if (sc_details.capabilities.minImageExtent.height > actual_extent.height) {
+			actual_extent.height = sc_details.capabilities.minImageExtent.height;
+		}
+
+		return actual_extent;
+	}
+}
+
+bool vulkan_createswapchain(struct Application *app) {
+	struct SwapChainSupportDetails sc_details = app->vulkan_data->sc_details;
+
+	// Get swapchain settings
+	VkSurfaceFormatKHR surface_format = vulkan_choosescsurfaceformat(sc_details);
+	VkPresentModeKHR present_mode = vulkan_choosescpresentmode(sc_details);
+	VkExtent2D extent = vulkan_choosescextent(app, sc_details);
+
+	// Determine swapchain image count
+	uint32_t image_count = sc_details.capabilities.minImageCount + 1;
+	if (sc_details.capabilities.maxImageCount > 0 &&
+		image_count > sc_details.capabilities.maxImageCount) {
+		image_count = sc_details.capabilities.maxImageCount;
+	}
+
+	// Create swapchain
+	VkSwapchainCreateInfoKHR sc_create_info = {0};
+	sc_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	sc_create_info.surface = app->vulkan_data->surface;
+	sc_create_info.minImageCount = image_count;
+	sc_create_info.imageFormat = surface_format.format;
+	sc_create_info.imageColorSpace = surface_format.colorSpace;
+	sc_create_info.imageExtent = extent;
+	sc_create_info.imageArrayLayers = 1;
+	sc_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	// Assuming only 1 graphics index & present index
+	if (app->vulkan_data->qf_indices.graphics_indices[0] !=
+		app->vulkan_data->qf_indices.present_indices[0]) {
+		sc_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		sc_create_info.queueFamilyIndexCount = 2;
+		uint32_t queue_indices[] = {app->vulkan_data->qf_indices.graphics_indices[0],
+									app->vulkan_data->qf_indices.present_indices[0]};
+		sc_create_info.pQueueFamilyIndices = queue_indices;
+	} else {
+		sc_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	}
+
+	sc_create_info.preTransform = sc_details.capabilities.currentTransform;
+	sc_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	sc_create_info.presentMode = present_mode;
+	sc_create_info.clipped = VK_TRUE;
+	sc_create_info.oldSwapchain = VK_NULL_HANDLE;
+
+	VkResult ret = vkCreateSwapchainKHR(app->vulkan_data->device, &sc_create_info, NULL,
+										&app->vulkan_data->swapchain);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to create swapchain.\n");
+		return false;
+	}
+
+	vkGetSwapchainImagesKHR(app->vulkan_data->device, app->vulkan_data->swapchain,
+							&app->vulkan_data->swapchain_images_size, NULL);
+
+	app->vulkan_data->swapchain_images = malloc(sizeof(*app->vulkan_data->swapchain_images) *
+												app->vulkan_data->swapchain_images_size);
+	if (app->vulkan_data->swapchain_images == NULL) {
+		fprintf(stderr, "Failure allocating memory for swapchain images.");
+		return false;
+	}
+
+	vkGetSwapchainImagesKHR(app->vulkan_data->device, app->vulkan_data->swapchain,
+							&app->vulkan_data->swapchain_images_size,
+							app->vulkan_data->swapchain_images);
+
+	app->vulkan_data->swapchain_imageformat = surface_format.format;
+	app->vulkan_data->swapchain_extent = extent;
 
 	return true;
 }
