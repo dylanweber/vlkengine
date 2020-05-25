@@ -2,7 +2,7 @@
 
 #include "engine_vulkan.h"
 
-void application_init(struct Application *app) {
+bool application_init(struct Application *app) {
 	bool ret;
 
 	// Initialize GLFW
@@ -14,8 +14,11 @@ void application_init(struct Application *app) {
 
 	ret = vulkan_init(app);
 	if (!ret) {
-		fprintf(stderr, "Failed to initialize Vulkan.");
+		fprintf(stderr, "Failed to initialize Vulkan.\n");
+		return false;
 	}
+
+	return true;
 }
 
 bool application_loopcondition(struct Application *app) {
@@ -29,10 +32,6 @@ void application_loopevent(struct Application *app) {
 }
 
 void application_close(struct Application *app) {
-	// Destroy debug messenger
-	if (enable_validation_layers)
-		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
-										  app->vulkan_data->debug_messenger, NULL);
 	// Close Vulkan instance
 	vulkan_close(app);
 	// End window & GLFW

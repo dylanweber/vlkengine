@@ -1,5 +1,6 @@
 #include "engine_vulkan.h"
 
+const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 const char *validation_extensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
 
@@ -67,7 +68,7 @@ bool vulkan_checkextensions() {
 
 	// Print and check extensions
 	printf("Supported extensions:\n");
-	int i, j, match_count = 0;
+	uint32_t i, j, match_count = 0;
 	for (i = 0; i < extension_count; i++) {
 		printf("\t%s", extensions[i].extensionName);
 		for (j = 0; j < glfw_extension_count; j++) {
@@ -103,7 +104,7 @@ void vulkan_getextensions(uint32_t *extension_size, const char ***extension_list
 		return;
 
 	// Copy const pointers for all extensions
-	int i;
+	uint32_t i;
 	for (i = 0; i < glfw_extension_count; i++) {
 		(*extension_list)[i] = glfw_extensions[i];
 	}
@@ -206,7 +207,7 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 
 	// Select applicable graphics queue family
 	VkBool32 present_support = VK_FALSE;
-	int i;
+	uint32_t i;
 	for (i = 0; i < queue_family_count; i++) {
 		// Check for graphics queue
 		if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT &&
@@ -226,7 +227,7 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 		}
 
 		// If struct is suitable, exit
-		if (vulkan_deviceissuitable(indices)) {
+		if (vulkan_queuefamilyissuitable(indices)) {
 			break;
 		}
 	}
@@ -235,7 +236,58 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 	return indices;
 }
 
-bool vulkan_deviceissuitable(struct QueueFamilies indices) {
+struct SwapChainSupportDetails vulkan_getswapchainsupport(struct Application *app,
+														  VkPhysicalDevice physical_device) {
+	struct SwapChainSupportDetails details = {0};
+
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, app->vulkan_data->surface,
+											  &details.capabilities);
+
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, app->vulkan_data->surface,
+										 &details.format_count, NULL);
+	if (details.format_count != 0) {
+		details.formats = malloc(sizeof(*details.formats) * details.format_count);
+		if (details.formats == NULL) {
+			fprintf(stderr, "Failure to allocate memory.\n");
+			return details;
+		}
+
+		vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, app->vulkan_data->surface,
+											 &details.format_count, details.formats);
+	}
+
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, app->vulkan_data->surface,
+											  &details.present_mode_count, NULL);
+
+	if (details.present_mode_count != 0) {
+		details.present_modes = malloc(sizeof(*details.present_modes) * details.present_mode_count);
+		if (details.present_modes == NULL) {
+			fprintf(stderr, "Failure to allocate memory.\n");
+			return details;
+		}
+
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, app->vulkan_data->surface,
+												  &details.present_mode_count,
+												  details.present_modes);
+	}
+
+	return details;
+}
+
+void vulkan_destroyswapchainsupport(struct SwapChainSupportDetails details) {
+	free(details.formats);
+	free(details.present_modes);
+}
+
+inline bool vulkan_deviceissuitable(struct QueueFamilies indices,
+									struct SwapChainSupportDetails details,
+									VkPhysicalDevice physical_device) {
+	return vulkan_devicesupportsextensions(physical_device) &&
+		   vulkan_queuefamilyissuitable(indices) && details.format_count > 0 &&
+		   details.present_mode_count > 0;
+}
+
+bool vulkan_queuefamilyissuitable(struct QueueFamilies indices) {
 	if (indices.graphics_count < 1 || indices.present_count < 1) {
 		return false;
 	}
@@ -243,15 +295,52 @@ bool vulkan_deviceissuitable(struct QueueFamilies indices) {
 	return true;
 }
 
+bool vulkan_devicesupportsextensions(VkPhysicalDevice physical_device) {
+	uint32_t extension_count;
+	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, NULL);
+
+	VkExtensionProperties *extensions = malloc(sizeof(*extensions) * extension_count);
+	vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, extensions);
+
+	bool result = vulkan_compareextensions(extensions, extension_count, device_extensions,
+										   sizeof(device_extensions) / sizeof(*device_extensions));
+
+	free(extensions);
+	return result;
+}
+
+inline bool vulkan_compareextensions(VkExtensionProperties *extensions, uint32_t extensions_size,
+									 const char **extension_set, uint32_t set_size) {
+	struct HashSet *set = hashset_create(VULKAN_HASHSET_SIZE);
+
+	bool flag = true;
+	int i;
+	for (i = 0; i < extensions_size; i++) {
+		hashset_store(set, extensions[i].extensionName);
+	}
+
+	for (i = 0; i < set_size; i++) {
+		if (hashset_exists(set, extension_set[i]) == false) {
+			flag = false;
+			break;
+		}
+	}
+
+	hashset_destroy(set);
+	return flag;
+}
+
 bool vulkan_checkvalidationlayers() {
 	VkResult ret;
 
+	// Get instance layer properties count
 	uint32_t layer_count;
 	ret = vkEnumerateInstanceLayerProperties(&layer_count, NULL);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure enumerating layer properties.");
 	}
 
+	// Get all instance layer properties
 	VkLayerProperties *available_layers = malloc(sizeof(*available_layers) * layer_count);
 	if (available_layers == NULL) {
 		fprintf(stderr, "Failure allocating memory.");
@@ -260,21 +349,36 @@ bool vulkan_checkvalidationlayers() {
 
 	vkEnumerateInstanceLayerProperties(&layer_count, available_layers);
 
-	int i, j, match_count = 0,
-			  validation_layers_size = sizeof(validation_layers) / sizeof(*validation_layers);
-	for (i = 0; i < validation_layers_size; i++) {
-		for (j = 0; j < layer_count; j++) {
-			if (strcmp(available_layers[j].layerName, validation_layers[i]) == 0) {
-				match_count++;
-			}
+	// Make sure required validation layers are found in instance layer properties
+	struct HashSet *set = hashset_create(VULKAN_HASHSET_SIZE);
+
+	bool flag = true;
+	int i;
+	for (i = 0; i < layer_count; i++) {
+		hashset_store(set, available_layers[i].layerName);
+	}
+	for (i = 0; i < sizeof(validation_layers) / sizeof(*validation_layers); i++) {
+		if (hashset_exists(set, validation_layers[i]) == false) {
+			flag = false;
+			break;
 		}
 	}
 
+	hashset_print(set);
+
 	free(available_layers);
-	return match_count == validation_layers_size;
+	hashset_destroy(set);
+	return flag;
 }
 
 void vulkan_close(struct Application *app) {
+	vulkan_destroyswapchainsupport(app->vulkan_data->sc_details);
+
+	// Destroy debug messenger
+	if (enable_validation_layers)
+		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
+										  app->vulkan_data->debug_messenger, NULL);
+
 	vkDestroyDevice(app->vulkan_data->device, NULL);
 	vkDestroySurfaceKHR(app->vulkan_data->instance, app->vulkan_data->surface, NULL);
 	vkDestroyInstance(app->vulkan_data->instance, NULL);
@@ -320,21 +424,28 @@ bool vulkan_pickdevice(struct Application *app) {
 	ret = vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, NULL);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure enumerating physical devices.");
+		return false;
 	}
 
 	// Show error if none are found
 	if (device_count == 0) {
 		fprintf(stderr, "Failed to find devices that support Vulkan.");
+		return false;
 	}
 
 	// Allocate array to store devices
 	VkPhysicalDevice *physical_devices = malloc(sizeof(*physical_devices) * device_count);
 	if (physical_devices == NULL) {
 		fprintf(stderr, "Failure to allocate memory.");
+		return false;
 	}
 
 	// Get devices from Vulkan
-	vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, physical_devices);
+	ret = vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, physical_devices);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to enumerate physical devices for Vulkan.");
+		return false;
+	}
 
 	// Determine most suitable device
 	printf("Found GPUs:\n");
@@ -343,6 +454,7 @@ bool vulkan_pickdevice(struct Application *app) {
 	VkPhysicalDeviceProperties device_properties;
 	VkPhysicalDeviceFeatures device_features;
 	struct QueueFamilies indices;
+	struct SwapChainSupportDetails details;
 	for (i = 0; i < device_count; i++) {
 		vkGetPhysicalDeviceProperties(physical_devices[i], &device_properties);
 		vkGetPhysicalDeviceFeatures(physical_devices[i], &device_features);
@@ -363,17 +475,20 @@ bool vulkan_pickdevice(struct Application *app) {
 		}
 
 		indices = vulkan_getqueuefamilies(app, physical_devices[i]);
+		details = vulkan_getswapchainsupport(app, physical_devices[i]);
 
 		// Pick best option
-		if (score > max_score && vulkan_deviceissuitable(indices)) {
+		if (score > max_score && vulkan_deviceissuitable(indices, details, physical_devices[i])) {
 			max_score = score;
 			app->vulkan_data->physical_device = physical_devices[i];
-			app->vulkan_data->indices = indices;
+			app->vulkan_data->qf_indices = indices;
+		} else {
+			vulkan_destroyswapchainsupport(details);
 		}
 
 		// Print device name
 		printf("\t%s\n\t\tScore: %d\n\t\tSuitable: %s\n", device_properties.deviceName, score,
-			   (vulkan_deviceissuitable(app->vulkan_data->indices)) ? "true" : "false");
+			   (app->vulkan_data->physical_device == physical_devices[i]) ? "true" : "false");
 	}
 
 	free(physical_devices);
@@ -390,13 +505,13 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 
 	// Go through every graphics index then present index and add to queue_create_infos if not found
 	int i, j;
-	for (i = 0; i < app->vulkan_data->indices.graphics_count; i++) {
+	for (i = 0; i < app->vulkan_data->qf_indices.graphics_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; i++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 				queue_create_infos[j].queueFamilyIndex =
-					app->vulkan_data->indices.graphics_indices[i];
+					app->vulkan_data->qf_indices.graphics_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
@@ -404,17 +519,17 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->indices.graphics_indices[i])
+				app->vulkan_data->qf_indices.graphics_indices[i])
 				break;
 		}
 	}
-	for (i = 0; i < app->vulkan_data->indices.present_count; i++) {
+	for (i = 0; i < app->vulkan_data->qf_indices.present_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; i++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 				queue_create_infos[j].queueFamilyIndex =
-					app->vulkan_data->indices.present_indices[i];
+					app->vulkan_data->qf_indices.present_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
@@ -422,7 +537,7 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->indices.present_indices[i])
+				app->vulkan_data->qf_indices.present_indices[i])
 				break;
 		}
 	}
@@ -436,7 +551,8 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	device_info.queueCreateInfoCount = queue_create_infos_size;
 	device_info.pEnabledFeatures = &device_features;
 
-	device_info.enabledExtensionCount = 0;
+	device_info.enabledExtensionCount = sizeof(device_extensions) / sizeof(*device_extensions);
+	device_info.ppEnabledExtensionNames = device_extensions;
 
 	if (enable_validation_layers) {
 		int validation_layers_size = sizeof(validation_layers) / sizeof(*validation_layers);
@@ -455,10 +571,10 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	}
 
 	// Get graphics queue
-	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->indices.graphics_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0], 0,
 					 &app->vulkan_data->graphics_queue);
 	// Get present queue
-	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->indices.present_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.present_indices[0], 0,
 					 &app->vulkan_data->present_queue);
 
 	return true;

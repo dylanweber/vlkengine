@@ -10,7 +10,7 @@ struct Application {
 	struct VulkanData *vulkan_data;
 };
 
-void application_init(struct Application *);
+bool application_init(struct Application *);
 bool application_loopcondition(struct Application *);
 void application_loopevent(struct Application *);
 void application_close(struct Application *);

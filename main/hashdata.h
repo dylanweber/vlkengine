@@ -44,7 +44,7 @@ struct HashSet {
 };
 
 struct HashSetDefinition {
-	char *key;
+	const char *key;
 	struct HashSetDefinition *next;
 };
 
@@ -56,9 +56,10 @@ bool hashtable_access(struct HashTable *, char *, union HashTableValue *);
 
 struct HashSet *hashset_create(size_t size);
 void hashset_destroy(struct HashSet *);
-bool hashset_store(struct HashSet *, char *);
-bool hashset_exists(struct HashSet *, char *);
+bool hashset_store(struct HashSet *, const char *);
+bool hashset_exists(struct HashSet *, const char *);
+void hashset_print(struct HashSet *);
 
-uint32_t __djb2_a(char *);
+uint32_t __djb2_a(const char *);
 
 #endif

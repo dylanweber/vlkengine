@@ -208,7 +208,7 @@ void hashset_destroy(struct HashSet *hashset) {
  * @return true Key has been stored correctly
  * @return false Key could not be stored
  */
-bool hashset_store(struct HashSet *hashset, char *key) {
+bool hashset_store(struct HashSet *hashset, const char *key) {
 	// Calculate key hash and determine table position
 	uint32_t hash = __djb2_a(key);
 	uint32_t table_pos = hash % hashset->size;
@@ -252,7 +252,7 @@ bool hashset_store(struct HashSet *hashset, char *key) {
  * @return true String has been found
  * @return false String has not been found
  */
-bool hashset_exists(struct HashSet *hashset, char *key) {
+bool hashset_exists(struct HashSet *hashset, const char *key) {
 	// Calculate key hash and determine table position
 	uint32_t hash = __djb2_a(key);
 	uint32_t table_pos = hash % hashset->size;
@@ -271,12 +271,34 @@ bool hashset_exists(struct HashSet *hashset, char *key) {
 }
 
 /**
+ * @brief Prints a set
+ *
+ * @param hashset Set to print
+ */
+void hashset_print(struct HashSet *hashset) {
+	size_t i;
+	struct HashSetDefinition *curr;
+
+	printf("{");
+
+	for (i = 0; i < hashset->size; i++) {
+		curr = hashset->table[i];
+		while (curr != NULL) {
+			printf("\"%s\",", curr->key);
+			curr = curr->next;
+		}
+	}
+
+	printf("\b}\n");
+}
+
+/**
  * @brief Hash function for HashTable and HashSet
  *
  * @param key Input string for hash
  * @return uint32_t Output hash
  */
-uint32_t __djb2_a(char *key) {
+uint32_t __djb2_a(const char *key) {
 	uint32_t hash = 0x1505;
 	int i;
 
