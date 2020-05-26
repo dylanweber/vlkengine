@@ -25,7 +25,7 @@ foreach(SOURCE ${SOURCES})
 			-o ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv -mfmt=num
 			--target-env=vulkan1.1
 			${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE}
-		DEPFILE ${SOURCE}.d
+		DEPFILE  ${CMAKE_CURRENT_BINARY_DIR}/${SOURCE}.d
 	)
 	add_custom_target(
 		shaders ALL
