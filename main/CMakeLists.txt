@@ -39,6 +39,10 @@ add_subdirectory(glfw)
 
 target_link_libraries(vlkengine glfw)
 
+# Shader compilation
+
+add_subdirectory(shaders)
+
 # Vulkan linking
 add_compile_definitions(GLFW_INCLUDE_VULKAN)
 
