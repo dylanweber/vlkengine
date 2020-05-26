@@ -14,7 +14,11 @@ bool vulkan_init(struct Application *app) {
 	}
 
 	// Create Vulkan instance
-	vulkan_createinstance(app);
+	ret = vulkan_createinstance(app);
+	if (ret == false) {
+		fprintf(stderr, "Could not create Vulkan instance.\n");
+		return false;
+	}
 
 	// Create validation layers (if enabled)
 	if (enable_validation_layers)
@@ -38,6 +42,11 @@ bool vulkan_init(struct Application *app) {
 	}
 	// Create swapchain
 	ret = vulkan_createswapchain(app);
+	if (ret == false) {
+		return false;
+	}
+	// Create swapchain image views
+	ret = vulkan_createimageviews(app);
 	if (ret == false) {
 		return false;
 	}
@@ -349,6 +358,14 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
+	// Destroy all swapchain image views
+	uint32_t i;
+	for (i = 0; i < app->vulkan_data->swapchain_imageviews_size; i++) {
+		vkDestroyImageView(app->vulkan_data->device, app->vulkan_data->swapchain_imageviews[i],
+						   NULL);
+	}
+	free(app->vulkan_data->swapchain_imageviews);
+
 	// Free array of swapchain images
 	free(app->vulkan_data->swapchain_images);
 
@@ -663,6 +680,10 @@ bool vulkan_createswapchain(struct Application *app) {
 	sc_create_info.imageArrayLayers = 1;
 	sc_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
+	if (enable_validation_layers && app->vulkan_data->qf_indices.graphics_count > 1) {
+		printf("Only using one graphics queue.\n");
+	}
+
 	// Assuming only 1 graphics index & present index
 	if (app->vulkan_data->qf_indices.graphics_indices[0] !=
 		app->vulkan_data->qf_indices.present_indices[0]) {
@@ -704,6 +725,44 @@ bool vulkan_createswapchain(struct Application *app) {
 
 	app->vulkan_data->swapchain_imageformat = surface_format.format;
 	app->vulkan_data->swapchain_extent = extent;
+
+	return true;
+}
+
+bool vulkan_createimageviews(struct Application *app) {
+	app->vulkan_data->swapchain_imageviews_size = app->vulkan_data->swapchain_images_size;
+	app->vulkan_data->swapchain_imageviews =
+		malloc(sizeof(*app->vulkan_data->swapchain_imageviews) *
+			   app->vulkan_data->swapchain_imageviews_size);
+	if (app->vulkan_data->swapchain_imageviews == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	uint32_t i;
+	for (i = 0; i < app->vulkan_data->swapchain_imageviews_size; i++) {
+		VkImageViewCreateInfo iv_create_info = {0};
+		iv_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		iv_create_info.image = app->vulkan_data->swapchain_images[i];
+		iv_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		iv_create_info.format = app->vulkan_data->swapchain_imageformat;
+		iv_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		iv_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		iv_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		iv_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		iv_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		iv_create_info.subresourceRange.baseMipLevel = 0;
+		iv_create_info.subresourceRange.levelCount = 1;
+		iv_create_info.subresourceRange.baseArrayLayer = 0;
+		iv_create_info.subresourceRange.layerCount = 1;
+
+		VkResult ret = vkCreateImageView(app->vulkan_data->device, &iv_create_info, NULL,
+										 &app->vulkan_data->swapchain_imageviews[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failed to create image view.\n");
+			return false;
+		}
+	}
 
 	return true;
 }

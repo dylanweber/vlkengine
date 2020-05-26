@@ -52,9 +52,10 @@ struct VulkanData {
 	VkImage *swapchain_images;
 	VkFormat swapchain_imageformat;
 	VkExtent2D swapchain_extent;
-	VkImageView *sc_imageviews;
+	uint32_t swapchain_imageviews_size;
+	VkImageView *swapchain_imageviews;
 
-	// Structures required to creation
+	// Structures required for creation
 	struct QueueFamilies qf_indices;
 	struct SwapChainSupportDetails sc_details;
 };
@@ -79,6 +80,7 @@ VkSurfaceFormatKHR vulkan_choosescsurfaceformat(struct SwapChainSupportDetails);
 VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
 VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
 bool vulkan_createswapchain(struct Application *);
+bool vulkan_createimageviews(struct Application *);
 
 // Callbacks & wrappers
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT,
