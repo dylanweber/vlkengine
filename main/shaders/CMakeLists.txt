@@ -11,23 +11,22 @@ find_program(
 
 file (GLOB SOURCES "*shader.*")
 
+add_custom_target(
+		shaders ALL
+)
+
 foreach(SOURCE ${SOURCES})
-	get_filename_component(NAME ${SOURCE} NAME_WE)
 	get_filename_component(FULL_NAME ${SOURCE} NAME)
 	add_custom_command(
-		OUTPUT ${NAME}.spv
+		TARGET shaders POST_BUILD
 		DEPENDS ${SOURCE}
 		COMMAND
 			${GLSLC}
 			-MD -MF ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.d
-			-o ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv -mfmt=num
+			-o ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.spv -mfmt=num
 			--target-env=vulkan1.1
 			${SOURCE}
 		DEPFILE  ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.d
 		COMMENT "Compiling ${FULL_NAME}"
-	)
-	add_custom_target(
-		shaders ALL
-		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv
 	)
 endforeach()
