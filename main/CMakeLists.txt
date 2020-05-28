@@ -14,6 +14,8 @@ set(SOURCES main.c
 			application.h
 			engine_vulkan.c
 			engine_vulkan.h
+			engine_object.c
+			engine_object.h
 			hashdata.c
 			hashdata.h
 			config.h)

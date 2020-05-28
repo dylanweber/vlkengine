@@ -23,7 +23,7 @@ foreach(SOURCE ${SOURCES})
 		COMMAND
 			${GLSLC}
 			-MD -MF ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.d
-			-o ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.spv -mfmt=num
+			-o ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.spv
 			--target-env=vulkan1.1
 			${SOURCE}
 		DEPFILE  ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.d
