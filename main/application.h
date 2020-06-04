@@ -5,9 +5,13 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#define EXECUTE_PATH_LEN 256
+
 struct Application {
+	char execute_path[EXECUTE_PATH_LEN];
 	GLFWwindow *window;
 	struct VulkanData *vulkan_data;
+	struct RenderObjectLink *objects;
 };
 
 bool application_init(struct Application *);

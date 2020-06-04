@@ -10,7 +10,7 @@ bool objectlink_add(struct Application *app, struct RenderObject *render_object)
 
 	struct RenderObjectLink *new_link = malloc(sizeof(*new_link));
 	if (new_link == NULL) {
-		fprintf(stderr, "Failure to allocate memory.");
+		fprintf(stderr, "Failure to allocate memory.\n");
 		return false;
 	}
 
@@ -83,9 +83,23 @@ bool object_destroy(struct Application *app, struct RenderObject *render_object)
 }
 
 bool object_populateshaders(struct Application *app, struct RenderObject *render_object) {
-	render_object->vertex_shader_data = vulkan_readshaderfile(render_object->vertex_shader_path);
-	render_object->fragment_shader_data =
-		vulkan_readshaderfile(render_object->fragment_shader_path);
+	char filepath[EXECUTE_PATH_LEN];
+
+	// Create filepath from app->execute_path for vertex shader
+	strcpy(filepath, app->execute_path);
+	strcat(filepath, render_object->vertex_shader_path);
+
+	// Read shader file
+	render_object->vertex_shader_data = vulkan_readshaderfile(filepath);
+
+	// Create filepath from app->execute_path for fragment shader
+	strcpy(filepath, app->execute_path);
+	strcat(filepath, render_object->fragment_shader_path);
+
+	// Read shader file
+	render_object->fragment_shader_data = vulkan_readshaderfile(filepath);
+
+	// Return success based on if files were read
 	return render_object->vertex_shader_data.size != 0 &&
 		   render_object->fragment_shader_data.size != 0;
 }
@@ -95,7 +109,7 @@ bool object_processshaders(struct Application *app, struct RenderObject *render_
 		vulkan_createshadermodule(app, render_object->fragment_shader_data);
 	render_object->fragment_shader =
 		vulkan_createshadermodule(app, render_object->fragment_shader_data);
-	return true;
+	return render_object->vertex_shader != NULL && render_object->fragment_shader != NULL;
 }
 
 void object_destroyshaders(struct Application *app, struct RenderObject *render_object) {

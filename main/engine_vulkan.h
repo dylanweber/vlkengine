@@ -3,6 +3,7 @@
 #include "glfw/glfw3.h"
 #include "hashdata.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -29,6 +30,11 @@ struct SwapChainSupportDetails {
 	VkSurfaceFormatKHR *formats;
 	uint32_t present_mode_count;
 	VkPresentModeKHR *present_modes;
+};
+
+struct ShaderFile {
+	char *data;
+	size_t size;
 };
 
 struct VulkanData {
@@ -81,6 +87,11 @@ VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
 VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
+
+// Shader functions
+struct ShaderFile vulkan_readshaderfile(const char *);
+void vulkan_destroyshaderfile(struct ShaderFile);
+VkShaderModule vulkan_createshadermodule(struct Application *, struct ShaderFile);
 
 // Callbacks & wrappers
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT,

@@ -1,5 +1,7 @@
 #include "engine_vulkan.h"
 
+#include "engine_object.h"
+
 const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 const char *validation_extensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
@@ -48,6 +50,12 @@ bool vulkan_init(struct Application *app) {
 	// Create swapchain image views
 	ret = vulkan_createimageviews(app);
 	if (ret == false) {
+		return false;
+	}
+
+	ret = objectlink_createshadermodules(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create all shader modules.\n");
 		return false;
 	}
 
@@ -767,6 +775,68 @@ bool vulkan_createimageviews(struct Application *app) {
 	return true;
 }
 
+// Shader functions
+struct ShaderFile vulkan_readshaderfile(const char *filename) {
+	struct ShaderFile return_shader = {0};
+
+	// Open file
+	FILE *fp = fopen(filename, "rb");
+	if (fp == NULL) {
+		fprintf(stderr, "Failed to open shader file.\n");
+		return return_shader;
+	}
+
+	// Get file size
+	fseek(fp, 0, SEEK_END);
+	return_shader.size = ftell(fp);
+	printf("Shader \"%s\" is %llu bytes long.\n", filename, return_shader.size);
+	assert(return_shader.size % 4 == 0);
+
+	return_shader.data = malloc(sizeof(*return_shader.data) * return_shader.size);
+	if (return_shader.data == NULL) {
+		fprintf(stderr, "Failed to allocate memory for shader.\n");
+		return_shader.size = 0;
+		return return_shader;
+	}
+
+	// Read file
+	fseek(fp, 0, SEEK_SET);
+	size_t read = fread(return_shader.data, return_shader.size, sizeof(*return_shader.data), fp);
+	if (read != 1) {
+		fprintf(stderr, "Failed to read entire shader.\n");
+		free(return_shader.data);
+		return_shader.size = 0;
+	}
+
+	fclose(fp);
+	return return_shader;
+}
+
+void vulkan_destroyshaderfile(struct ShaderFile shaderfile) {
+	free(shaderfile.data);
+}
+
+VkShaderModule vulkan_createshadermodule(struct Application *app, struct ShaderFile shaderfile) {
+	VkShaderModuleCreateInfo sm_create_info = {0};
+
+	sm_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	sm_create_info.codeSize = shaderfile.size;
+	sm_create_info.pCode = (uint32_t *)shaderfile.data;
+
+	VkShaderModule shader_module;
+	VkResult ret =
+		vkCreateShaderModule(app->vulkan_data->device, &sm_create_info, NULL, &shader_module);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to create shader module.\n");
+		return NULL;
+	}
+
+	printf("Created shader module @ 0x%p\n", shader_module);
+
+	return shader_module;
+}
+
+// Callbacks & wrappers
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
 					 VkDebugUtilsMessageTypeFlagsEXT message_type,
