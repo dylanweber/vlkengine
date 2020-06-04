@@ -1,8 +1,8 @@
 #include <stdbool.h>
 #ifndef CONFIG_H
 #define CONFIG_H
-#define BUILD_NUMBER 391
-#define VERSION_NUMBER "0.0.391"
+#define BUILD_NUMBER 393
+#define VERSION_NUMBER "0.0.393"
 #ifndef NDEBUG
 	static const bool enable_validation_layers = true;
 #else

@@ -70,10 +70,27 @@ bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_crea
 	render_object->vertex_shader_path = ro_create_info->vertex_shader_path;
 	render_object->fragment_shader_path = ro_create_info->fragment_shader_path;
 	render_object->is_static = ro_create_info->is_static;
+	render_object->retain_count = 1;
 	if (object_populateshaders(app, render_object) == false) {
 		fprintf(stderr, "Failure reading shaders.\n");
 		return false;
 	}
+	return true;
+}
+
+bool object_retain(struct RenderObject *render_object) {
+	if (render_object->is_static == true)
+		return true;
+	render_object->retain_count++;
+	return true;
+}
+
+bool object_release(struct RenderObject *render_object) {
+	if (render_object->is_static == true)
+		return true;
+	render_object->retain_count--;
+	if (render_object->retain_count == 0)
+		free(render_object);
 	return true;
 }
 

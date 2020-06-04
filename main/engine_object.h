@@ -17,7 +17,8 @@ struct RenderObject {
 	char *fragment_shader_path;
 	struct ShaderFile fragment_shader_data;
 	VkShaderModule fragment_shader;
-	bool is_static;
+	uint16_t retain_count;
+	bool is_static : 1;
 };
 
 struct RenderObjectCreateInfo {
@@ -36,6 +37,8 @@ bool objectlink_add(struct Application *, struct RenderObject *);
 bool objectlink_createshadermodules(struct Application *);
 bool objectlink_destroy(struct Application *);
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);
+bool object_retain(struct RenderObject *render_object);
+bool object_release(struct RenderObject *render_object);
 bool object_destroy(struct Application *, struct RenderObject *);
 bool object_populateshaders(struct Application *, struct RenderObject *);
 bool object_processshaders(struct Application *, struct RenderObject *);
