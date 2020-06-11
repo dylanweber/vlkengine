@@ -380,6 +380,8 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
+	// Destroy graphics pipeline
+	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->graphics_pipeline, NULL);
 	// Destroy graphics pipeline layout
 	vkDestroyPipelineLayout(app->vulkan_data->device, app->vulkan_data->pipeline_layout, NULL);
 	// Destroy render pass
@@ -835,9 +837,11 @@ bool vulkan_createpipeline(struct Application *app) {
 	// Get size of game object list
 	size_t objects_size = objectlist_getsize(app);
 
+	printf("Object linked list is %llu long.\n", objects_size);
+
 	// Allocate shader stages
 	VkPipelineShaderStageCreateInfo *shader_stages =
-		malloc(sizeof(*shader_stages) * objects_size * 2);
+		calloc(objects_size * 2, sizeof(*shader_stages));
 	if (shader_stages == NULL) {
 		fprintf(stderr, "Failed to allocate memory.\n");
 		return false;
@@ -947,11 +951,38 @@ bool vulkan_createpipeline(struct Application *app) {
 	VkResult ret = vkCreatePipelineLayout(app->vulkan_data->device, &pipeline_layout_info, NULL,
 										  &app->vulkan_data->pipeline_layout);
 	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to create graphics pipeline layout.\n");
+		return false;
+	}
+
+	// Graphics pipeline creation information
+	VkGraphicsPipelineCreateInfo pipeline_info = {0};
+	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipeline_info.stageCount = 2 * objects_size;
+	pipeline_info.pStages = shader_stages;
+	pipeline_info.pVertexInputState = &vertex_input_info;
+	pipeline_info.pInputAssemblyState = &input_assembly;
+	pipeline_info.pViewportState = &viewport_state;
+	pipeline_info.pRasterizationState = &rasterizer;
+	pipeline_info.pMultisampleState = &multisampling;
+	pipeline_info.pDepthStencilState = NULL;
+	pipeline_info.pColorBlendState = &colorblending;
+	pipeline_info.pDynamicState = NULL;
+	// Specify graphics pipeline layout
+	pipeline_info.layout = app->vulkan_data->pipeline_layout;
+	pipeline_info.renderPass = app->vulkan_data->render_pass;
+	pipeline_info.subpass = 0;
+	pipeline_info.basePipelineHandle = NULL;
+	pipeline_info.basePipelineIndex = -1;
+
+	ret = vkCreateGraphicsPipelines(app->vulkan_data->device, NULL, 1, &pipeline_info, NULL,
+									&app->vulkan_data->graphics_pipeline);
+	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure to create graphics pipeline.\n");
 		return false;
 	}
 
-	// Possible to delete shaders here
+	// NOTE: Possible to delete shaders here
 
 	// Free shader stages
 	free(shader_stages);
@@ -1025,7 +1056,7 @@ vulkan_debugcallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
 					 VkDebugUtilsMessageTypeFlagsEXT message_type,
 					 const VkDebugUtilsMessengerCallbackDataEXT *p_callbackdata, void *p_userdata) {
 	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		fprintf(stderr, "Validation layer: %s\n", p_callbackdata->pMessage);
+		fprintf(stderr, "\033[31;1mValidation layer:\033[0m %s\n", p_callbackdata->pMessage);
 	}
 
 	return VK_FALSE;

@@ -64,6 +64,7 @@ struct VulkanData {
 	// Graphics pipeline
 	VkRenderPass render_pass;
 	VkPipelineLayout pipeline_layout;
+	VkPipeline graphics_pipeline;
 
 	// Structures required for creation
 	struct QueueFamilies qf_indices;

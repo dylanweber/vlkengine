@@ -135,7 +135,7 @@ bool object_populateshaders(struct Application *app, struct RenderObject *render
 
 bool object_processshaders(struct Application *app, struct RenderObject *render_object) {
 	render_object->vertex_shader =
-		vulkan_createshadermodule(app, render_object->fragment_shader_data);
+		vulkan_createshadermodule(app, render_object->vertex_shader_data);
 	render_object->fragment_shader =
 		vulkan_createshadermodule(app, render_object->fragment_shader_data);
 	return render_object->vertex_shader != NULL && render_object->fragment_shader != NULL;
