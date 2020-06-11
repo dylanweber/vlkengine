@@ -61,6 +61,9 @@ struct VulkanData {
 	uint32_t swapchain_imageviews_size;
 	VkImageView *swapchain_imageviews;
 
+	// Graphics pipeline
+	VkPipelineLayout pipeline_layout;
+
 	// Structures required for creation
 	struct QueueFamilies qf_indices;
 	struct SwapChainSupportDetails sc_details;
@@ -87,6 +90,7 @@ VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
 VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
+bool vulkan_createpipeline(struct Application *);
 
 // Shader functions
 struct ShaderFile vulkan_readshaderfile(const char *);

@@ -50,6 +50,18 @@ bool objectlink_createshadermodules(struct Application *app) {
 	return true;
 }
 
+size_t objectlist_getsize(struct Application *app) {
+	size_t ret_val = 0;
+	struct RenderObjectLink *curr = app->objects;
+
+	while (curr != NULL) {
+		ret_val++;
+		curr = curr->next;
+	}
+
+	return ret_val;
+}
+
 bool objectlink_destroy(struct Application *app) {
 	struct RenderObjectLink *curr = app->objects, *next;
 

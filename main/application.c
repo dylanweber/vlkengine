@@ -8,7 +8,7 @@
 bool application_init(struct Application *app) {
 	bool ret;
 
-	// Get executable path
+	// Get executable path in Windows
 	memset(app->execute_path, '\0', EXECUTE_PATH_LEN);
 	size_t path_len = GetModuleFileName(NULL, app->execute_path, EXECUTE_PATH_LEN);
 	size_t i = path_len;

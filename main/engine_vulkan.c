@@ -53,9 +53,17 @@ bool vulkan_init(struct Application *app) {
 		return false;
 	}
 
+	// Create shader modules from all current objects
 	ret = objectlink_createshadermodules(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create all shader modules.\n");
+		return false;
+	}
+
+	// Create pipeline using shaders
+	ret = vulkan_createpipeline(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
 	}
 
@@ -366,6 +374,9 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
+	// Destroy graphics pipeline layout
+	vkDestroyPipelineLayout(app->vulkan_data->device, app->vulkan_data->pipeline_layout, NULL);
+
 	// Destroy all swapchain image views
 	uint32_t i;
 	for (i = 0; i < app->vulkan_data->swapchain_imageviews_size; i++) {
@@ -772,6 +783,133 @@ bool vulkan_createimageviews(struct Application *app) {
 		}
 	}
 
+	return true;
+}
+
+bool vulkan_createpipeline(struct Application *app) {
+	// Get size of game object list
+	size_t objects_size = objectlist_getsize(app);
+
+	// Allocate shader stages
+	VkPipelineShaderStageCreateInfo *shader_stages =
+		malloc(sizeof(*shader_stages) * objects_size * 2);
+	if (shader_stages == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	// Populate all shader stages
+	struct RenderObjectLink *curr = app->objects;
+	size_t i;
+	for (i = 0; i < 2 * objects_size; i += 2) {
+		// Add vertex shader
+		shader_stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shader_stages[i].stage = VK_SHADER_STAGE_VERTEX_BIT;
+		shader_stages[i].module = curr->render_object->vertex_shader;
+		shader_stages[i].pName = "main";
+
+		// Add fragment shader
+		shader_stages[i + 1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shader_stages[i + 1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		shader_stages[i + 1].module = curr->render_object->fragment_shader;
+		shader_stages[i + 1].pName = "main";
+
+		// Move to next game object
+		assert(i < 2 * objects_size || curr->next != NULL);
+		curr = curr->next;
+	}
+
+	VkPipelineVertexInputStateCreateInfo vertex_input_info = {0};
+	vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertex_input_info.vertexBindingDescriptionCount = 0;
+	vertex_input_info.pVertexBindingDescriptions = NULL;
+	vertex_input_info.vertexAttributeDescriptionCount = 0;
+	vertex_input_info.pVertexAttributeDescriptions = NULL;
+
+	VkPipelineInputAssemblyStateCreateInfo input_assembly = {0};
+	input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	input_assembly.primitiveRestartEnable = VK_FALSE;
+
+	VkViewport viewport = {0};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)app->vulkan_data->swapchain_extent.width;
+	viewport.height = (float)app->vulkan_data->swapchain_extent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {0};
+	scissor.offset = (VkOffset2D){0, 0};
+	scissor.extent = app->vulkan_data->swapchain_extent;
+
+	VkPipelineViewportStateCreateInfo viewport_state = {0};
+	viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewport_state.viewportCount = 1;
+	viewport_state.pViewports = &viewport;
+	viewport_state.scissorCount = 1;
+	viewport_state.pScissors = &scissor;
+
+	VkPipelineRasterizationStateCreateInfo rasterizer = {0};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling = {0};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.0f;
+	multisampling.pSampleMask = NULL;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState colorblend_attachment = {0};
+	colorblend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+										   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorblend_attachment.blendEnable = VK_FALSE;
+	colorblend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorblend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorblend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+	colorblend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorblend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorblend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorblending = {0};
+	colorblending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorblending.logicOpEnable = VK_FALSE;
+	colorblending.logicOp = VK_LOGIC_OP_COPY;
+	colorblending.attachmentCount = 1;
+	colorblending.pAttachments = &colorblend_attachment;
+	colorblending.blendConstants[0] = 0.0f;
+	colorblending.blendConstants[1] = 0.0f;
+	colorblending.blendConstants[2] = 0.0f;
+	colorblending.blendConstants[3] = 0.0f;
+
+	VkPipelineLayoutCreateInfo pipeline_layout_info = {0};
+	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipeline_layout_info.setLayoutCount = 0;
+	pipeline_layout_info.pushConstantRangeCount = 0;
+
+	VkResult ret = vkCreatePipelineLayout(app->vulkan_data->device, &pipeline_layout_info, NULL,
+										  &app->vulkan_data->pipeline_layout);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to create graphics pipeline.\n");
+		return false;
+	}
+
+	// Possible to delete shaders here
+
+	// Free shader stages
+	free(shader_stages);
 	return true;
 }
 

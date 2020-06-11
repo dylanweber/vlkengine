@@ -35,10 +35,11 @@ struct RenderObjectLink {
 bool objectlink_init(struct Application *);
 bool objectlink_add(struct Application *, struct RenderObject *);
 bool objectlink_createshadermodules(struct Application *);
+size_t objectlist_getsize(struct Application *);
 bool objectlink_destroy(struct Application *);
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);
-bool object_retain(struct RenderObject *render_object);
-bool object_release(struct RenderObject *render_object);
+bool object_retain(struct RenderObject *);
+bool object_release(struct RenderObject *);
 bool object_destroy(struct Application *, struct RenderObject *);
 bool object_populateshaders(struct Application *, struct RenderObject *);
 bool object_processshaders(struct Application *, struct RenderObject *);
