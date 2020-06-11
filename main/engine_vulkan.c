@@ -60,6 +60,12 @@ bool vulkan_init(struct Application *app) {
 		return false;
 	}
 
+	// Create render pass
+	ret = vulkan_createrenderpass(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create render pass.\n");
+		return false;
+	}
 	// Create pipeline using shaders
 	ret = vulkan_createpipeline(app);
 	if (ret == false) {
@@ -376,6 +382,8 @@ bool vulkan_checkvalidationlayers() {
 void vulkan_close(struct Application *app) {
 	// Destroy graphics pipeline layout
 	vkDestroyPipelineLayout(app->vulkan_data->device, app->vulkan_data->pipeline_layout, NULL);
+	// Destroy render pass
+	vkDestroyRenderPass(app->vulkan_data->device, app->vulkan_data->render_pass, NULL);
 
 	// Destroy all swapchain image views
 	uint32_t i;
@@ -744,6 +752,43 @@ bool vulkan_createswapchain(struct Application *app) {
 
 	app->vulkan_data->swapchain_imageformat = surface_format.format;
 	app->vulkan_data->swapchain_extent = extent;
+
+	return true;
+}
+
+bool vulkan_createrenderpass(struct Application *app) {
+	VkAttachmentDescription color_attachment = {0};
+	color_attachment.format = app->vulkan_data->swapchain_imageformat;
+	color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference color_attachment_ref = {0};
+	color_attachment_ref.attachment = 0;
+	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass = {0};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &color_attachment_ref;
+
+	VkRenderPassCreateInfo render_pass_info = {0};
+	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_info.attachmentCount = 1;
+	render_pass_info.pAttachments = &color_attachment;
+	render_pass_info.subpassCount = 1;
+	render_pass_info.pSubpasses = &subpass;
+
+	VkResult ret = vkCreateRenderPass(app->vulkan_data->device, &render_pass_info, NULL,
+									  &app->vulkan_data->render_pass);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to create render pass.\n");
+		return false;
+	}
 
 	return true;
 }

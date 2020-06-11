@@ -62,6 +62,7 @@ struct VulkanData {
 	VkImageView *swapchain_imageviews;
 
 	// Graphics pipeline
+	VkRenderPass render_pass;
 	VkPipelineLayout pipeline_layout;
 
 	// Structures required for creation
@@ -90,6 +91,7 @@ VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
 VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
+bool vulkan_createrenderpass(struct Application *);
 bool vulkan_createpipeline(struct Application *);
 
 // Shader functions
