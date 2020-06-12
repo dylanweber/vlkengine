@@ -15,6 +15,7 @@
 
 #define GFX_INDICES_SIZE 1
 #define PRESENT_INDICES_SIZE 1
+#define MAX_FRAMES_IN_FLIGHT 2
 #define VULKAN_HASHSET_SIZE 32
 
 struct QueueFamilies {
@@ -74,8 +75,11 @@ struct VulkanData {
 	VkCommandBuffer *command_buffers;
 
 	// Semaphores for presentation
-	VkSemaphore image_available_sem;
-	VkSemaphore render_finished_sem;
+	VkSemaphore image_available_sem[MAX_FRAMES_IN_FLIGHT];
+	VkSemaphore render_finished_sem[MAX_FRAMES_IN_FLIGHT];
+	VkFence in_flight_fen[MAX_FRAMES_IN_FLIGHT];
+	VkFence *imgs_in_flight;
+	uint32_t current_frame;
 
 	// Structures required for creation
 	struct QueueFamilies qf_indices;
@@ -108,7 +112,7 @@ bool vulkan_createpipeline(struct Application *);
 bool vulkan_createframebuffers(struct Application *);
 bool vulkan_createcommandpool(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);
-bool vulkan_createsemaphores(struct Application *);
+bool vulkan_createsynchronization(struct Application *);
 bool vulkan_drawframe(struct Application *);
 
 // Shader functions

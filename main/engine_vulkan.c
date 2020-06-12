@@ -91,11 +91,13 @@ bool vulkan_init(struct Application *app) {
 		return false;
 	}
 	// Create semaphores
-	ret = vulkan_createsemaphores(app);
+	ret = vulkan_createsynchronization(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure making sempahores.\n");
 		return false;
 	}
+
+	app->vulkan_data->current_frame = 0;
 
 	return true;
 }
@@ -406,9 +408,15 @@ bool vulkan_checkvalidationlayers() {
 void vulkan_close(struct Application *app) {
 	uint32_t i;	 // Loop index variable for destruction
 
-	// Destroy sempahores
-	vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->render_finished_sem, NULL);
-	vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->image_available_sem, NULL);
+	// Destroy sempahores & fences
+	for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->render_finished_sem[i],
+						   NULL);
+		vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->image_available_sem[i],
+						   NULL);
+		vkDestroyFence(app->vulkan_data->device, app->vulkan_data->in_flight_fen[i], NULL);
+	}
+	free(app->vulkan_data->imgs_in_flight);
 
 	// Destroy command pool
 	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
@@ -477,7 +485,7 @@ bool vulkan_createsurface(struct Application *app) {
 	VkResult ret = glfwCreateWindowSurface(app->vulkan_data->instance, app->window, NULL,
 										   &app->vulkan_data->surface);
 	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Unable to make Vulkan surface.");
+		fprintf(stderr, "Unable to make Vulkan surface.\n");
 		return false;
 	}
 
@@ -491,27 +499,27 @@ bool vulkan_pickdevice(struct Application *app) {
 	uint32_t device_count = 0;
 	ret = vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, NULL);
 	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failure enumerating physical devices.");
+		fprintf(stderr, "Failure enumerating physical devices.\n");
 		return false;
 	}
 
 	// Show error if none are found
 	if (device_count == 0) {
-		fprintf(stderr, "Failed to find devices that support Vulkan.");
+		fprintf(stderr, "Failed to find devices that support Vulkan.\n");
 		return false;
 	}
 
 	// Allocate array to store devices
 	VkPhysicalDevice *physical_devices = malloc(sizeof(*physical_devices) * device_count);
 	if (physical_devices == NULL) {
-		fprintf(stderr, "Failure to allocate memory.");
+		fprintf(stderr, "Failure to allocate memory.\n");
 		return false;
 	}
 
 	// Get devices from Vulkan
 	ret = vkEnumeratePhysicalDevices(app->vulkan_data->instance, &device_count, physical_devices);
 	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failure to enumerate physical devices for Vulkan.");
+		fprintf(stderr, "Failure to enumerate physical devices for Vulkan.\n");
 		return false;
 	}
 
@@ -656,7 +664,7 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	VkResult res = vkCreateDevice(app->vulkan_data->physical_device, &device_info, NULL,
 								  &app->vulkan_data->device);
 	if (res != VK_SUCCESS) {
-		fprintf(stderr, "Failure creating logical Vulkan device.");
+		fprintf(stderr, "Failure creating logical Vulkan device.\n");
 		return false;
 	}
 
@@ -783,7 +791,7 @@ bool vulkan_createswapchain(struct Application *app) {
 	app->vulkan_data->swapchain_images = malloc(sizeof(*app->vulkan_data->swapchain_images) *
 												app->vulkan_data->swapchain_images_size);
 	if (app->vulkan_data->swapchain_images == NULL) {
-		fprintf(stderr, "Failure allocating memory for swapchain images.");
+		fprintf(stderr, "Failure allocating memory for swapchain images.\n");
 		return false;
 	}
 
@@ -1063,7 +1071,7 @@ bool vulkan_createframebuffers(struct Application *app) {
 		ret = vkCreateFramebuffer(app->vulkan_data->device, &framebuffer_info, NULL,
 								  &app->vulkan_data->swapchain_framebuffers[i]);
 		if (ret != VK_SUCCESS) {
-			fprintf(stderr, "Failure to create framebuffer %u.", i);
+			fprintf(stderr, "Failure to create framebuffer %u.\n", i);
 			return false;
 		}
 	}
@@ -1148,22 +1156,43 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 	return true;
 }
 
-bool vulkan_createsemaphores(struct Application *app) {
-	VkSemaphoreCreateInfo semaphore_info = {0};
-	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	VkResult ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
-									 &app->vulkan_data->image_available_sem);
-	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failure making image available semaphore.\n");
+bool vulkan_createsynchronization(struct Application *app) {
+	app->vulkan_data->imgs_in_flight =
+		calloc(app->vulkan_data->swapchain_images_size, sizeof(*app->vulkan_data->imgs_in_flight));
+	if (app->vulkan_data->imgs_in_flight == NULL) {
+		fprintf(stderr, "Failed to allocate fences.\n");
 		return false;
 	}
 
-	ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
-							&app->vulkan_data->render_finished_sem);
-	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failure making render finished semaphore.\n");
-		return false;
+	VkSemaphoreCreateInfo semaphore_info = {0};
+	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fence_info = {0};
+	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	uint32_t i;
+	for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkResult ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
+										 &app->vulkan_data->image_available_sem[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failure making image available semaphore.\n");
+			return false;
+		}
+
+		ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
+								&app->vulkan_data->render_finished_sem[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failure making render finished semaphore.\n");
+			return false;
+		}
+
+		ret = vkCreateFence(app->vulkan_data->device, &fence_info, NULL,
+							&app->vulkan_data->in_flight_fen[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failure making in flight fence.\n");
+			return false;
+		}
 	}
 
 	return true;
@@ -1171,21 +1200,40 @@ bool vulkan_createsemaphores(struct Application *app) {
 
 bool vulkan_drawframe(struct Application *app) {
 	uint32_t image_index;
+
+	vkWaitForFences(app->vulkan_data->device, 1,
+					&app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame], VK_TRUE,
+					UINT64_MAX);
+
 	vkAcquireNextImageKHR(app->vulkan_data->device, app->vulkan_data->swapchain, UINT64_MAX,
-						  app->vulkan_data->image_available_sem, NULL, &image_index);
+						  app->vulkan_data->image_available_sem[app->vulkan_data->current_frame],
+						  NULL, &image_index);
+
+	if (app->vulkan_data->imgs_in_flight[image_index] != VK_NULL_HANDLE) {
+		vkWaitForFences(app->vulkan_data->device, 1, &app->vulkan_data->imgs_in_flight[image_index],
+						VK_TRUE, UINT64_MAX);
+	}
+	app->vulkan_data->imgs_in_flight[image_index] =
+		app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame];
 
 	VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	VkSubmitInfo submit_info = {0};
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit_info.waitSemaphoreCount = 1;
-	submit_info.pWaitSemaphores = &app->vulkan_data->image_available_sem;
+	submit_info.pWaitSemaphores =
+		&app->vulkan_data->image_available_sem[app->vulkan_data->current_frame];
 	submit_info.pWaitDstStageMask = wait_stages;
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &app->vulkan_data->command_buffers[image_index];
 	submit_info.signalSemaphoreCount = 1;
-	submit_info.pSignalSemaphores = &app->vulkan_data->render_finished_sem;
+	submit_info.pSignalSemaphores =
+		&app->vulkan_data->render_finished_sem[app->vulkan_data->current_frame];
 
-	VkResult ret = vkQueueSubmit(app->vulkan_data->graphics_queue, 1, &submit_info, NULL);
+	vkResetFences(app->vulkan_data->device, 1,
+				  &app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame]);
+
+	VkResult ret = vkQueueSubmit(app->vulkan_data->graphics_queue, 1, &submit_info,
+								 app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame]);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failed to submit to graphics queue.\n");
 		return false;
@@ -1194,7 +1242,8 @@ bool vulkan_drawframe(struct Application *app) {
 	VkPresentInfoKHR present_info = {0};
 	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	present_info.waitSemaphoreCount = 1;
-	present_info.pWaitSemaphores = &app->vulkan_data->render_finished_sem;
+	present_info.pWaitSemaphores =
+		&app->vulkan_data->render_finished_sem[app->vulkan_data->current_frame];
 	present_info.swapchainCount = 1;
 	present_info.pSwapchains = &app->vulkan_data->swapchain;
 	present_info.pImageIndices = &image_index;
@@ -1202,6 +1251,7 @@ bool vulkan_drawframe(struct Application *app) {
 
 	vkQueuePresentKHR(app->vulkan_data->present_queue, &present_info);
 
+	app->vulkan_data->current_frame = (app->vulkan_data->current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	return true;
 }
 
