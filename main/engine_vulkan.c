@@ -98,6 +98,7 @@ bool vulkan_init(struct Application *app) {
 	}
 
 	app->vulkan_data->current_frame = 0;
+	app->vulkan_data->framebuffer_resized = false;
 
 	return true;
 }
@@ -418,8 +419,24 @@ void vulkan_close(struct Application *app) {
 	}
 	free(app->vulkan_data->imgs_in_flight);
 
+	vulkan_cleanupswapchain(app);
+
 	// Destroy command pool
 	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
+
+	// Destroy debug messenger
+	if (enable_validation_layers)
+		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
+										  app->vulkan_data->debug_messenger, NULL);
+
+	// Destroy instance
+	vkDestroyDevice(app->vulkan_data->device, NULL);
+	vkDestroySurfaceKHR(app->vulkan_data->instance, app->vulkan_data->surface, NULL);
+	vkDestroyInstance(app->vulkan_data->instance, NULL);
+}
+
+bool vulkan_cleanupswapchain(struct Application *app) {
+	uint32_t i;	 // Loop index variable for destruction
 
 	// Destroy all framebuffers
 	for (i = 0; i < app->vulkan_data->swapchain_framebuffers_size; i++) {
@@ -427,6 +444,10 @@ void vulkan_close(struct Application *app) {
 							 NULL);
 	}
 	free(app->vulkan_data->swapchain_framebuffers);
+
+	// Free command buffers
+	vkFreeCommandBuffers(app->vulkan_data->device, app->vulkan_data->command_pool,
+						 app->vulkan_data->command_buffers_size, app->vulkan_data->command_buffers);
 
 	// Destroy graphics pipeline
 	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->graphics_pipeline, NULL);
@@ -447,17 +468,7 @@ void vulkan_close(struct Application *app) {
 
 	// Destroy swapchain
 	vkDestroySwapchainKHR(app->vulkan_data->device, app->vulkan_data->swapchain, NULL);
-	vulkan_destroyswapchainsupport(app->vulkan_data->sc_details);
-
-	// Destroy debug messenger
-	if (enable_validation_layers)
-		vulkan_destroydebugutilsmessenger(app->vulkan_data->instance,
-										  app->vulkan_data->debug_messenger, NULL);
-
-	// Destroy instance
-	vkDestroyDevice(app->vulkan_data->device, NULL);
-	vkDestroySurfaceKHR(app->vulkan_data->instance, app->vulkan_data->surface, NULL);
-	vkDestroyInstance(app->vulkan_data->instance, NULL);
+	return true;
 }
 
 bool vulkan_setupdebugmessenger(struct Application *app) {
@@ -558,11 +569,11 @@ bool vulkan_pickdevice(struct Application *app) {
 		if (score > max_score && vulkan_deviceissuitable(indices, details)) {
 			max_score = score;
 			app->vulkan_data->physical_device = physical_devices[i];
-			app->vulkan_data->qf_indices = indices;
-			app->vulkan_data->sc_details = details;
-		} else {
-			vulkan_destroyswapchainsupport(details);
+			// app->vulkan_data->qf_indices = indices;
+			// app->vulkan_data->sc_details = details;
 		}
+
+		vulkan_destroyswapchainsupport(details);
 
 		// Print device name
 		printf("\t%s\n\t\tScore: %d\n\t\tSuitable: %s\n", device_properties.deviceName, score,
@@ -596,6 +607,8 @@ inline bool vulkan_devicesupportsextensions(VkPhysicalDevice physical_device) {
 
 bool vulkan_createlogicaldevice(struct Application *app) {
 	// Create set of VkDeviceQueueCreateInfos for every index in our QueueFamilies
+	struct QueueFamilies qf_indices =
+		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
 	uint32_t queue_create_infos_size = 0;
 	VkDeviceQueueCreateInfo queue_create_infos[GFX_INDICES_SIZE + PRESENT_INDICES_SIZE] = {0};
 
@@ -603,39 +616,35 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 
 	// Go through every graphics index then present index and add to queue_create_infos if not found
 	int i, j;
-	for (i = 0; i < app->vulkan_data->qf_indices.graphics_count; i++) {
+	for (i = 0; i < qf_indices.graphics_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; i++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_create_infos[j].queueFamilyIndex =
-					app->vulkan_data->qf_indices.graphics_indices[i];
+				queue_create_infos[j].queueFamilyIndex = qf_indices.graphics_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
 				break;
 			}
 			// If match is found, go to next index
-			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->qf_indices.graphics_indices[i])
+			if (queue_create_infos[j].queueFamilyIndex == qf_indices.graphics_indices[i])
 				break;
 		}
 	}
-	for (i = 0; i < app->vulkan_data->qf_indices.present_count; i++) {
+	for (i = 0; i < qf_indices.present_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; i++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_create_infos[j].queueFamilyIndex =
-					app->vulkan_data->qf_indices.present_indices[i];
+				queue_create_infos[j].queueFamilyIndex = qf_indices.present_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
 				break;
 			}
 			// If match is found, go to next index
-			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->qf_indices.present_indices[i])
+			if (queue_create_infos[j].queueFamilyIndex == qf_indices.present_indices[i])
 				break;
 		}
 	}
@@ -669,10 +678,10 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	}
 
 	// Get graphics queue
-	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.graphics_indices[0], 0,
 					 &app->vulkan_data->graphics_queue);
 	// Get present queue
-	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.present_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.present_indices[0], 0,
 					 &app->vulkan_data->present_queue);
 
 	return true;
@@ -730,8 +739,54 @@ VkExtent2D vulkan_choosescextent(struct Application *app,
 	}
 }
 
+bool vulkan_recreateswapchain(struct Application *app) {
+	vkDeviceWaitIdle(app->vulkan_data->device);
+
+	vulkan_cleanupswapchain(app);
+
+	// Create swapchain
+	VkResult ret = vulkan_createswapchain(app);
+	if (ret == false) {
+		return false;
+	}
+	// Create swapchain image views
+	ret = vulkan_createimageviews(app);
+	if (ret == false) {
+		return false;
+	}
+	// Create render pass
+	ret = vulkan_createrenderpass(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create render pass.\n");
+		return false;
+	}
+	// Create pipeline using shaders
+	ret = vulkan_createpipeline(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create pipeline.\n");
+		return false;
+	}
+	// Create framebuffers
+	ret = vulkan_createframebuffers(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create framebuffers.\n");
+		return false;
+	}
+	// Create command buffesr
+	ret = vulkan_createcommandbuffers(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create command buffers.\n");
+		return false;
+	}
+
+	return true;
+}
+
 bool vulkan_createswapchain(struct Application *app) {
-	struct SwapChainSupportDetails sc_details = app->vulkan_data->sc_details;
+	struct SwapChainSupportDetails sc_details =
+		vulkan_getswapchainsupport(app, app->vulkan_data->physical_device);
+	struct QueueFamilies qf_indices =
+		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
 
 	// Get swapchain settings
 	VkSurfaceFormatKHR surface_format = vulkan_choosescsurfaceformat(sc_details);
@@ -756,17 +811,15 @@ bool vulkan_createswapchain(struct Application *app) {
 	sc_create_info.imageArrayLayers = 1;
 	sc_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-	if (enable_validation_layers && app->vulkan_data->qf_indices.graphics_count > 1) {
+	if (enable_validation_layers && qf_indices.graphics_count > 1) {
 		printf("Only using one graphics queue.\n");
 	}
 
 	// Assuming only 1 graphics index & present index
-	if (app->vulkan_data->qf_indices.graphics_indices[0] !=
-		app->vulkan_data->qf_indices.present_indices[0]) {
+	if (qf_indices.graphics_indices[0] != qf_indices.present_indices[0]) {
 		sc_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		sc_create_info.queueFamilyIndexCount = 2;
-		uint32_t queue_indices[] = {app->vulkan_data->qf_indices.graphics_indices[0],
-									app->vulkan_data->qf_indices.present_indices[0]};
+		uint32_t queue_indices[] = {qf_indices.graphics_indices[0], qf_indices.present_indices[0]};
 		sc_create_info.pQueueFamilyIndices = queue_indices;
 	} else {
 		sc_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -802,6 +855,7 @@ bool vulkan_createswapchain(struct Application *app) {
 	app->vulkan_data->swapchain_imageformat = surface_format.format;
 	app->vulkan_data->swapchain_extent = extent;
 
+	vulkan_destroyswapchainsupport(sc_details);
 	return true;
 }
 
@@ -1080,10 +1134,11 @@ bool vulkan_createframebuffers(struct Application *app) {
 }
 
 bool vulkan_createcommandpool(struct Application *app) {
+	struct QueueFamilies qf_indices =
+		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
 	VkCommandPoolCreateInfo pool_info = {0};
 	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	pool_info.queueFamilyIndex =
-		app->vulkan_data->qf_indices.graphics_indices[0];  // Assume first graphics index
+	pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
 	pool_info.flags = 0;
 
 	VkResult ret = vkCreateCommandPool(app->vulkan_data->device, &pool_info, NULL,
@@ -1205,9 +1260,16 @@ bool vulkan_drawframe(struct Application *app) {
 					&app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame], VK_TRUE,
 					UINT64_MAX);
 
-	vkAcquireNextImageKHR(app->vulkan_data->device, app->vulkan_data->swapchain, UINT64_MAX,
-						  app->vulkan_data->image_available_sem[app->vulkan_data->current_frame],
-						  NULL, &image_index);
+	VkResult ret = vkAcquireNextImageKHR(
+		app->vulkan_data->device, app->vulkan_data->swapchain, UINT64_MAX,
+		app->vulkan_data->image_available_sem[app->vulkan_data->current_frame], NULL, &image_index);
+	if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
+		vulkan_recreateswapchain(app);
+		return true;
+	} else if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
+		fprintf(stderr, "Failure to aquire swap chain image.\n");
+		return false;
+	}
 
 	if (app->vulkan_data->imgs_in_flight[image_index] != VK_NULL_HANDLE) {
 		vkWaitForFences(app->vulkan_data->device, 1, &app->vulkan_data->imgs_in_flight[image_index],
@@ -1232,8 +1294,8 @@ bool vulkan_drawframe(struct Application *app) {
 	vkResetFences(app->vulkan_data->device, 1,
 				  &app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame]);
 
-	VkResult ret = vkQueueSubmit(app->vulkan_data->graphics_queue, 1, &submit_info,
-								 app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame]);
+	ret = vkQueueSubmit(app->vulkan_data->graphics_queue, 1, &submit_info,
+						app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame]);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failed to submit to graphics queue.\n");
 		return false;
@@ -1249,7 +1311,15 @@ bool vulkan_drawframe(struct Application *app) {
 	present_info.pImageIndices = &image_index;
 	present_info.pResults = NULL;
 
-	vkQueuePresentKHR(app->vulkan_data->present_queue, &present_info);
+	ret = vkQueuePresentKHR(app->vulkan_data->present_queue, &present_info);
+	if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR ||
+		app->vulkan_data->framebuffer_resized == true) {
+		app->vulkan_data->framebuffer_resized = false;
+		vulkan_recreateswapchain(app);
+		return true;
+	} else if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to present swapchain image.\n");
+	}
 
 	app->vulkan_data->current_frame = (app->vulkan_data->current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	return true;

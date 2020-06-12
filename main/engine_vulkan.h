@@ -80,10 +80,11 @@ struct VulkanData {
 	VkFence in_flight_fen[MAX_FRAMES_IN_FLIGHT];
 	VkFence *imgs_in_flight;
 	uint32_t current_frame;
+	bool framebuffer_resized;
 
 	// Structures required for creation
-	struct QueueFamilies qf_indices;
-	struct SwapChainSupportDetails sc_details;
+	// struct QueueFamilies qf_indices;
+	// struct SwapChainSupportDetails sc_details;
 };
 
 bool vulkan_init(struct Application *);
@@ -99,12 +100,14 @@ bool vulkan_compareextensions(VkExtensionProperties *, uint32_t, const char **, 
 bool vulkan_checkvalidationlayers();
 bool vulkan_createsurface(struct Application *);
 void vulkan_close(struct Application *);
+bool vulkan_cleanupswapchain(struct Application *);
 bool vulkan_setupdebugmessenger(struct Application *);
 bool vulkan_pickdevice(struct Application *);
 bool vulkan_createlogicaldevice(struct Application *);
 VkSurfaceFormatKHR vulkan_choosescsurfaceformat(struct SwapChainSupportDetails);
 VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails);
 VkExtent2D vulkan_choosescextent(struct Application *, struct SwapChainSupportDetails);
+bool vulkan_recreateswapchain(struct Application *);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
 bool vulkan_createrenderpass(struct Application *);
