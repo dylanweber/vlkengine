@@ -66,6 +66,17 @@ struct VulkanData {
 	VkPipelineLayout pipeline_layout;
 	VkPipeline graphics_pipeline;
 
+	// Framebuffers & command buffers
+	uint32_t swapchain_framebuffers_size;
+	VkFramebuffer *swapchain_framebuffers;
+	VkCommandPool command_pool;
+	uint32_t command_buffers_size;
+	VkCommandBuffer *command_buffers;
+
+	// Semaphores for presentation
+	VkSemaphore image_available_sem;
+	VkSemaphore render_finished_sem;
+
 	// Structures required for creation
 	struct QueueFamilies qf_indices;
 	struct SwapChainSupportDetails sc_details;
@@ -94,6 +105,11 @@ bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
 bool vulkan_createrenderpass(struct Application *);
 bool vulkan_createpipeline(struct Application *);
+bool vulkan_createframebuffers(struct Application *);
+bool vulkan_createcommandpool(struct Application *);
+bool vulkan_createcommandbuffers(struct Application *);
+bool vulkan_createsemaphores(struct Application *);
+bool vulkan_drawframe(struct Application *);
 
 // Shader functions
 struct ShaderFile vulkan_readshaderfile(const char *);

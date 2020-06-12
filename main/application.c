@@ -45,7 +45,7 @@ bool application_init(struct Application *app) {
 
 	// Init Vulkan
 	ret = vulkan_init(app);
-	if (!ret) {
+	if (ret == false) {
 		fprintf(stderr, "Failed to initialize Vulkan.\n");
 		return false;
 	}
@@ -59,8 +59,19 @@ bool application_loopcondition(struct Application *app) {
 }
 
 void application_loopevent(struct Application *app) {
+	bool ret;
+
+	// Draw frame
+	ret = vulkan_drawframe(app);
+	if (ret == false) {
+		fprintf(stderr, "Problem drawing frame.\n");
+	}
+
 	// Poll for events like keyboard & mouse
 	glfwPollEvents();
+
+	// Wait for queue to idle
+	vkQueueWaitIdle(app->vulkan_data->present_queue);
 }
 
 void application_close(struct Application *app) {

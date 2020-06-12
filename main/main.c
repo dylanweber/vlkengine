@@ -28,6 +28,9 @@ int main(int argc, char **argv) {
 		application_loopevent(&app);
 	}
 
+	// Wait for GPU to idle
+	vkDeviceWaitIdle(vulkan_data.device);
+
 	application_close(&app);
 
 	return EXIT_SUCCESS;

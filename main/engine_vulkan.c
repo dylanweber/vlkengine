@@ -72,6 +72,30 @@ bool vulkan_init(struct Application *app) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
 	}
+	// Create framebuffers
+	ret = vulkan_createframebuffers(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create framebuffers.\n");
+		return false;
+	}
+	// Create command pool
+	ret = vulkan_createcommandpool(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create command pool.\n");
+		return false;
+	}
+	// Create command buffesr
+	ret = vulkan_createcommandbuffers(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create command buffers.\n");
+		return false;
+	}
+	// Create semaphores
+	ret = vulkan_createsemaphores(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure making sempahores.\n");
+		return false;
+	}
 
 	return true;
 }
@@ -380,6 +404,21 @@ bool vulkan_checkvalidationlayers() {
 }
 
 void vulkan_close(struct Application *app) {
+	uint32_t i;	 // Loop index variable for destruction
+
+	// Destroy sempahores
+	vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->render_finished_sem, NULL);
+	vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->image_available_sem, NULL);
+
+	// Destroy command pool
+	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
+
+	// Destroy all framebuffers
+	for (i = 0; i < app->vulkan_data->swapchain_framebuffers_size; i++) {
+		vkDestroyFramebuffer(app->vulkan_data->device, app->vulkan_data->swapchain_framebuffers[i],
+							 NULL);
+	}
+
 	// Destroy graphics pipeline
 	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->graphics_pipeline, NULL);
 	// Destroy graphics pipeline layout
@@ -388,7 +427,6 @@ void vulkan_close(struct Application *app) {
 	vkDestroyRenderPass(app->vulkan_data->device, app->vulkan_data->render_pass, NULL);
 
 	// Destroy all swapchain image views
-	uint32_t i;
 	for (i = 0; i < app->vulkan_data->swapchain_imageviews_size; i++) {
 		vkDestroyImageView(app->vulkan_data->device, app->vulkan_data->swapchain_imageviews[i],
 						   NULL);
@@ -778,12 +816,22 @@ bool vulkan_createrenderpass(struct Application *app) {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &color_attachment_ref;
 
+	VkSubpassDependency dependency = {0};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	VkRenderPassCreateInfo render_pass_info = {0};
 	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	render_pass_info.attachmentCount = 1;
 	render_pass_info.pAttachments = &color_attachment;
 	render_pass_info.subpassCount = 1;
 	render_pass_info.pSubpasses = &subpass;
+	render_pass_info.dependencyCount = 1;
+	render_pass_info.pDependencies = &dependency;
 
 	VkResult ret = vkCreateRenderPass(app->vulkan_data->device, &render_pass_info, NULL,
 									  &app->vulkan_data->render_pass);
@@ -986,6 +1034,173 @@ bool vulkan_createpipeline(struct Application *app) {
 
 	// Free shader stages
 	free(shader_stages);
+	return true;
+}
+
+bool vulkan_createframebuffers(struct Application *app) {
+	app->vulkan_data->swapchain_framebuffers_size = app->vulkan_data->swapchain_imageviews_size;
+	app->vulkan_data->swapchain_framebuffers =
+		malloc(sizeof(*app->vulkan_data->swapchain_framebuffers) *
+			   app->vulkan_data->swapchain_framebuffers_size);
+	if (app->vulkan_data->swapchain_framebuffers == NULL) {
+		fprintf(stderr, "Failure to allocate framebuffers.\n");
+		return false;
+	}
+
+	VkResult ret;
+	uint32_t i;
+	for (i = 0; i < app->vulkan_data->swapchain_imageviews_size; i++) {
+		VkFramebufferCreateInfo framebuffer_info = {0};
+		framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebuffer_info.renderPass = app->vulkan_data->render_pass;
+		framebuffer_info.attachmentCount = 1;
+		framebuffer_info.pAttachments = &app->vulkan_data->swapchain_imageviews[i];
+		framebuffer_info.width = app->vulkan_data->swapchain_extent.width;
+		framebuffer_info.height = app->vulkan_data->swapchain_extent.height;
+		framebuffer_info.layers = 1;
+
+		ret = vkCreateFramebuffer(app->vulkan_data->device, &framebuffer_info, NULL,
+								  &app->vulkan_data->swapchain_framebuffers[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failure to create framebuffer %u.", i);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool vulkan_createcommandpool(struct Application *app) {
+	VkCommandPoolCreateInfo pool_info = {0};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.queueFamilyIndex =
+		app->vulkan_data->qf_indices.graphics_indices[0];  // Assume first graphics index
+	pool_info.flags = 0;
+
+	VkResult ret = vkCreateCommandPool(app->vulkan_data->device, &pool_info, NULL,
+									   &app->vulkan_data->command_pool);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to create command pool.\n");
+		return false;
+	}
+
+	return true;
+}
+
+bool vulkan_createcommandbuffers(struct Application *app) {
+	app->vulkan_data->command_buffers_size = app->vulkan_data->swapchain_framebuffers_size;
+	app->vulkan_data->command_buffers =
+		malloc(sizeof(*app->vulkan_data->command_buffers) * app->vulkan_data->command_buffers_size);
+	if (app->vulkan_data->command_buffers == NULL) {
+		fprintf(stderr, "Failure to allocate command buffers.\n");
+		return false;
+	}
+
+	VkCommandBufferAllocateInfo alloc_info = {0};
+	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.commandPool = app->vulkan_data->command_pool;
+	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandBufferCount = app->vulkan_data->command_buffers_size;
+
+	VkResult ret = vkAllocateCommandBuffers(app->vulkan_data->device, &alloc_info,
+											app->vulkan_data->command_buffers);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to allocate command buffers from Vulkan.\n");
+		return false;
+	}
+
+	uint32_t i;
+	for (i = 0; i < app->vulkan_data->command_buffers_size; i++) {
+		VkCommandBufferBeginInfo begin_info = {0};
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+		ret = vkBeginCommandBuffer(app->vulkan_data->command_buffers[i], &begin_info);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failure to begin recording to command buffer.\n");
+			return false;
+		}
+
+		VkRenderPassBeginInfo renderpass_info = {0};
+		renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderpass_info.renderPass = app->vulkan_data->render_pass;
+		renderpass_info.framebuffer = app->vulkan_data->swapchain_framebuffers[i];
+		renderpass_info.renderArea.offset = (VkOffset2D){0, 0};
+		renderpass_info.renderArea.extent = app->vulkan_data->swapchain_extent;
+
+		VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+		renderpass_info.clearValueCount = 1;
+		renderpass_info.pClearValues = &clear_color;
+
+		vkCmdBeginRenderPass(app->vulkan_data->command_buffers[i], &renderpass_info,
+							 VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindPipeline(app->vulkan_data->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
+						  app->vulkan_data->graphics_pipeline);
+		vkCmdDraw(app->vulkan_data->command_buffers[i], 3, 1, 0, 0);
+		vkCmdEndRenderPass(app->vulkan_data->command_buffers[i]);
+		ret = vkEndCommandBuffer(app->vulkan_data->command_buffers[i]);
+		if (ret != VK_SUCCESS) {
+			fprintf(stderr, "Failed to record command buffer.\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool vulkan_createsemaphores(struct Application *app) {
+	VkSemaphoreCreateInfo semaphore_info = {0};
+	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkResult ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
+									 &app->vulkan_data->image_available_sem);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure making image available semaphore.\n");
+		return false;
+	}
+
+	ret = vkCreateSemaphore(app->vulkan_data->device, &semaphore_info, NULL,
+							&app->vulkan_data->render_finished_sem);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure making render finished semaphore.\n");
+		return false;
+	}
+
+	return true;
+}
+
+bool vulkan_drawframe(struct Application *app) {
+	uint32_t image_index;
+	vkAcquireNextImageKHR(app->vulkan_data->device, app->vulkan_data->swapchain, UINT64_MAX,
+						  app->vulkan_data->image_available_sem, NULL, &image_index);
+
+	VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	VkSubmitInfo submit_info = {0};
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.waitSemaphoreCount = 1;
+	submit_info.pWaitSemaphores = &app->vulkan_data->image_available_sem;
+	submit_info.pWaitDstStageMask = wait_stages;
+	submit_info.commandBufferCount = 1;
+	submit_info.pCommandBuffers = &app->vulkan_data->command_buffers[image_index];
+	submit_info.signalSemaphoreCount = 1;
+	submit_info.pSignalSemaphores = &app->vulkan_data->render_finished_sem;
+
+	VkResult ret = vkQueueSubmit(app->vulkan_data->graphics_queue, 1, &submit_info, NULL);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to submit to graphics queue.\n");
+		return false;
+	}
+
+	VkPresentInfoKHR present_info = {0};
+	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	present_info.waitSemaphoreCount = 1;
+	present_info.pWaitSemaphores = &app->vulkan_data->render_finished_sem;
+	present_info.swapchainCount = 1;
+	present_info.pSwapchains = &app->vulkan_data->swapchain;
+	present_info.pImageIndices = &image_index;
+	present_info.pResults = NULL;
+
+	vkQueuePresentKHR(app->vulkan_data->present_queue, &present_info);
+
 	return true;
 }
 
