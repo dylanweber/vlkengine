@@ -61,12 +61,14 @@ bool application_loopcondition(struct Application *app) {
 }
 
 void application_loopevent(struct Application *app) {
-	bool ret;
+	bool ret, iconified = glfwGetWindowAttrib(app->window, GLFW_ICONIFIED);
 
 	// Draw frame
-	ret = vulkan_drawframe(app);
-	if (ret == false) {
-		fprintf(stderr, "Problem drawing frame.\n");
+	if (iconified == false) {
+		ret = vulkan_drawframe(app);
+		if (ret == false) {
+			fprintf(stderr, "Problem drawing frame.\n");
+		}
 	}
 
 	// Poll for events like keyboard & mouse
