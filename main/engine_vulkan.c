@@ -418,6 +418,7 @@ void vulkan_close(struct Application *app) {
 		vkDestroyFramebuffer(app->vulkan_data->device, app->vulkan_data->swapchain_framebuffers[i],
 							 NULL);
 	}
+	free(app->vulkan_data->swapchain_framebuffers);
 
 	// Destroy graphics pipeline
 	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->graphics_pipeline, NULL);
