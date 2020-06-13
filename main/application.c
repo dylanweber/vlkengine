@@ -29,6 +29,7 @@ bool application_init(struct Application *app) {
 	}
 	glfwSetWindowUserPointer(app->window, app);
 	glfwSetFramebufferSizeCallback(app->window, application_resize);
+	glfwSetWindowSizeLimits(app->window, 200, 200, GLFW_DONT_CARE, GLFW_DONT_CARE);
 
 	printf("Created window @ 0x%p\n", app->window);
 
@@ -81,7 +82,6 @@ void application_loopevent(struct Application *app) {
 void application_resize(GLFWwindow *window, int width, int height) {
 	struct Application *app = glfwGetWindowUserPointer(window);
 	app->vulkan_data->framebuffer_resized = true;
-	return;
 }
 
 void application_close(struct Application *app) {
