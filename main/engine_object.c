@@ -1,10 +1,23 @@
 #include "engine_object.h"
 
+/**
+ * @brief Initializes object link
+ *
+ * @param app Current application
+ * @return Success boolean
+ */
 bool objectlink_init(struct Application *app) {
 	app->objects = NULL;
 	return true;
 }
 
+/**
+ * @brief Adds an object to the application's object link
+ *
+ * @param app Current application
+ * @param render_object Object to add to application
+ * @return Success boolean
+ */
 bool objectlink_add(struct Application *app, struct RenderObject *render_object) {
 	struct RenderObjectLink *curr = app->objects;
 
@@ -34,8 +47,7 @@ bool objectlink_add(struct Application *app, struct RenderObject *render_object)
  * @brief Goes through the entire object linked list and creates VkShaderModules for all items
  *
  * @param app Current application with a logical Vulkan device
- * @return true Successfully created all shader modules
- * @return false Failed to create shader modules
+ * @return Success boolean
  */
 bool objectlink_createshadermodules(struct Application *app) {
 	struct RenderObjectLink *curr = app->objects;

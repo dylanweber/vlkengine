@@ -713,11 +713,15 @@ VkPresentModeKHR vulkan_choosescpresentmode(struct SwapChainSupportDetails sc_de
 VkExtent2D vulkan_choosescextent(struct Application *app,
 								 struct SwapChainSupportDetails sc_details) {
 	if (sc_details.capabilities.currentExtent.width != UINT32_MAX) {
+		printf("Current render size: %d x %d\n", sc_details.capabilities.currentExtent.width,
+			   sc_details.capabilities.currentExtent.height);
 		return sc_details.capabilities.currentExtent;
 	} else {
 		// Get current framebuffer size
 		int width, height;
 		glfwGetFramebufferSize(app->window, &width, &height);
+
+		printf("Current render size: %d x %d\n", width, height);
 
 		VkExtent2D actual_extent = {.width = width, .height = height};
 
@@ -947,8 +951,6 @@ bool vulkan_createimageviews(struct Application *app) {
 bool vulkan_createpipeline(struct Application *app) {
 	// Get size of game object list
 	size_t objects_size = objectlist_getsize(app);
-
-	printf("Object linked list is %llu long.\n", objects_size);
 
 	// Allocate shader stages
 	VkPipelineShaderStageCreateInfo *shader_stages =

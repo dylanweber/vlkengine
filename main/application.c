@@ -29,6 +29,7 @@ bool application_init(struct Application *app) {
 	}
 	glfwSetWindowUserPointer(app->window, app);
 	glfwSetFramebufferSizeCallback(app->window, application_resize);
+	glfwSetWindowRefreshCallback(app->window, application_refresh);
 	glfwSetWindowSizeLimits(app->window, 200, 200, GLFW_DONT_CARE, GLFW_DONT_CARE);
 
 	printf("Created window @ 0x%p\n", app->window);
@@ -37,12 +38,15 @@ bool application_init(struct Application *app) {
 	objectlink_init(app);
 
 	// Create game objects
-	struct RenderObjectCreateInfo ro_create_info = {.vertex_shader_path = "shaders/shader.vert.spv",
-													.fragment_shader_path =
-														"shaders/shader.frag.spv",
+	struct RenderObjectCreateInfo ro_create_info = {.vertex_shader_path = "shaders/shader.vs.spv",
+													.fragment_shader_path = "shaders/shader.fs.spv",
 													.is_static = false};
 	struct RenderObject *triangle = malloc(sizeof(*triangle));
-	object_init(app, &ro_create_info, triangle);
+	ret = object_init(app, &ro_create_info, triangle);
+	if (ret == false) {
+		fprintf(stderr, "Failure initializing object.\n");
+		return false;
+	}
 
 	objectlink_add(app, triangle);
 
@@ -82,6 +86,24 @@ void application_loopevent(struct Application *app) {
 void application_resize(GLFWwindow *window, int width, int height) {
 	struct Application *app = glfwGetWindowUserPointer(window);
 	app->vulkan_data->framebuffer_resized = true;
+	printf("Resized.\n");
+}
+
+void application_refresh(GLFWwindow *window) {
+	struct Application *app = glfwGetWindowUserPointer(window);
+
+	bool ret, iconified = glfwGetWindowAttrib(app->window, GLFW_ICONIFIED);
+	app->vulkan_data->framebuffer_resized = true;
+
+	// Draw frame
+	if (iconified == false) {
+		ret = vulkan_drawframe(app);
+		if (ret == false) {
+			fprintf(stderr, "Problem drawing frame.\n");
+		}
+	}
+
+	printf("Refreshed.\n");
 }
 
 void application_close(struct Application *app) {

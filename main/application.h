@@ -17,7 +17,8 @@ struct Application {
 bool application_init(struct Application *);
 bool application_loopcondition(struct Application *);
 void application_loopevent(struct Application *);
-void application_resize(GLFWwindow *window, int width, int height);
+void application_resize(GLFWwindow *, int, int);
+void application_refresh(GLFWwindow *);
 void application_close(struct Application *);
 
 #endif
