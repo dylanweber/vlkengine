@@ -1,5 +1,6 @@
 #include "application.h"
 #include "config.h"
+#include "engine_object.h"
 #include "engine_vulkan.h"
 #include "glfw/glfw3.h"
 
@@ -15,8 +16,9 @@ int main(int argc, char **argv) {
 	printf("\n");
 
 	struct VulkanData vulkan_data = {0};
+	struct RenderObjectChain chain = {0};
 	struct Application app = {
-		.execute_path = {0}, .window = NULL, .vulkan_data = &vulkan_data, .objects = NULL};
+		.execute_path = {0}, .window = NULL, .vulkan_data = &vulkan_data, .objects = &chain};
 
 	bool ret = application_init(&app);
 	if (ret == false) {

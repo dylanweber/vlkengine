@@ -11,7 +11,7 @@ struct Application {
 	char execute_path[EXECUTE_PATH_LEN];
 	GLFWwindow *window;
 	struct VulkanData *vulkan_data;
-	struct RenderObjectLink *objects;
+	struct RenderObjectChain *objects;
 };
 
 bool application_init(struct Application *);

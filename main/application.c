@@ -35,7 +35,7 @@ bool application_init(struct Application *app) {
 	printf("Created window @ 0x%p\n", app->window);
 
 	// Initialize game object list
-	objectlink_init(app);
+	objectlink_init(app->objects);
 
 	// Create game objects
 	struct RenderObjectCreateInfo ro_create_info = {.vertex_shader_path = "shaders/shader.vs.spv",
@@ -48,7 +48,7 @@ bool application_init(struct Application *app) {
 		return false;
 	}
 
-	objectlink_add(app, triangle);
+	objectlink_add(app->objects, triangle);
 
 	// Init Vulkan
 	ret = vulkan_init(app);
@@ -108,7 +108,7 @@ void application_refresh(GLFWwindow *window) {
 
 void application_close(struct Application *app) {
 	// Destroy objects
-	objectlink_destroy(app);
+	objectlink_destroy(app->objects, app);
 	// Close Vulkan instance
 	vulkan_close(app);
 	// End window & GLFW

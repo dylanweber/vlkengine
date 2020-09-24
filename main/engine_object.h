@@ -32,17 +32,22 @@ struct RenderObjectLink {
 	struct RenderObjectLink *next;
 };
 
-bool objectlink_init(struct Application *);
-bool objectlink_add(struct Application *, struct RenderObject *);
-bool objectlink_createshadermodules(struct Application *);
-size_t objectlist_getsize(struct Application *);
-bool objectlink_destroy(struct Application *);
+struct RenderObjectChain {
+	size_t size;
+	struct RenderObjectLink *link;
+};
+
+bool objectlink_init(struct RenderObjectChain *);
+bool objectlink_add(struct RenderObjectChain *, struct RenderObject *);
+bool objectlink_createshadermodules(struct RenderObjectChain *, struct Application *);
+size_t objectlist_getsize(struct RenderObjectChain *);
+bool objectlink_destroy(struct RenderObjectChain *, struct Application *);
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);
 bool object_retain(struct RenderObject *);
 bool object_release(struct RenderObject *);
-bool object_destroy(struct Application *, struct RenderObject *);
-bool object_populateshaders(struct Application *, struct RenderObject *);
-bool object_processshaders(struct Application *, struct RenderObject *);
-void object_destroyshaders(struct Application *, struct RenderObject *);
+bool object_destroy(struct RenderObject *, struct Application *);
+bool object_populateshaders(struct RenderObject *, struct Application *);
+bool object_processshaders(struct RenderObject *, struct Application *);
+void object_destroyshaders(struct RenderObject *, struct Application *);
 
 #endif

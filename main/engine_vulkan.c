@@ -54,7 +54,7 @@ bool vulkan_init(struct Application *app) {
 	}
 
 	// Create shader modules from all current objects
-	ret = objectlink_createshadermodules(app);
+	ret = objectlink_createshadermodules(app->objects, app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create all shader modules.\n");
 		return false;
@@ -950,7 +950,7 @@ bool vulkan_createimageviews(struct Application *app) {
 
 bool vulkan_createpipeline(struct Application *app) {
 	// Get size of game object list
-	size_t objects_size = objectlist_getsize(app);
+	size_t objects_size = objectlist_getsize(app->objects);
 
 	// Allocate shader stages
 	VkPipelineShaderStageCreateInfo *shader_stages =
@@ -961,7 +961,7 @@ bool vulkan_createpipeline(struct Application *app) {
 	}
 
 	// Populate all shader stages
-	struct RenderObjectLink *curr = app->objects;
+	struct RenderObjectLink *curr = app->objects->link;
 	size_t i;
 	for (i = 0; i < 2 * objects_size; i += 2) {
 		// Add vertex shader
