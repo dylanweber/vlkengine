@@ -981,12 +981,25 @@ bool vulkan_createpipeline(struct Application *app) {
 		curr = curr->next;
 	}
 
+	// Get vertex binding and attribute descriptions
+	VkVertexInputBindingDescription binding_desc = vertex_getbindingdescription();
+	uint32_t attr_size = 0;
+
+	vertex_getattributedescriptions(&attr_size, NULL);
+	VkVertexInputAttributeDescription *attr_descs = malloc(sizeof(*attr_descs) * attr_size);
+	if (attr_descs == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	vertex_getattributedescriptions(&attr_size, attr_descs);
+
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {0};
 	vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertex_input_info.vertexBindingDescriptionCount = 0;
-	vertex_input_info.pVertexBindingDescriptions = NULL;
-	vertex_input_info.vertexAttributeDescriptionCount = 0;
-	vertex_input_info.pVertexAttributeDescriptions = NULL;
+	vertex_input_info.vertexBindingDescriptionCount = 1;
+	vertex_input_info.pVertexBindingDescriptions = &binding_desc;
+	vertex_input_info.vertexAttributeDescriptionCount = attr_size;
+	vertex_input_info.pVertexAttributeDescriptions = attr_descs;
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly = {0};
 	input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1096,6 +1109,9 @@ bool vulkan_createpipeline(struct Application *app) {
 	}
 
 	// NOTE: Possible to delete shaders here
+
+	// Free vertex descriptions
+	free(attr_descs);
 
 	// Free shader stages
 	free(shader_stages);
@@ -1250,6 +1266,32 @@ bool vulkan_createsynchronization(struct Application *app) {
 			fprintf(stderr, "Failure making in flight fence.\n");
 			return false;
 		}
+	}
+
+	return true;
+}
+
+bool vulkan_createvertexbuffers(struct Application *app) {
+	// Create a vertex buffer for every game object
+	struct RenderObjectLink *curr = app->objects->link;
+
+	while (curr->next != NULL) {
+		VkBufferCreateInfo buffer_info = {0};
+
+		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		buffer_info.size =
+			sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size;
+		buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		buffer_info.flags = 0;
+
+		if (vkCreateBuffer(app->vulkan_data->device, &buffer_info, NULL,
+						   &curr->render_object->vertex_buffer) != VK_SUCCESS) {
+			fprintf(stderr, "Failure creating vertex buffer.\n");
+			return false;
+		}
+
+		curr = curr->next;
 	}
 
 	return true;

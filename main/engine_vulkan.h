@@ -1,5 +1,6 @@
 #include "application.h"
 #include "config.h"
+#include "engine_vertex.h"
 #include "glfw/glfw3.h"
 #include "hashdata.h"
 
@@ -116,6 +117,7 @@ bool vulkan_createframebuffers(struct Application *);
 bool vulkan_createcommandpool(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);
 bool vulkan_createsynchronization(struct Application *);
+bool vulkan_createvertexbuffers(struct Application *);
 bool vulkan_drawframe(struct Application *);
 
 // Shader functions

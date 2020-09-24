@@ -129,6 +129,7 @@ bool object_release(struct RenderObject *render_object) {
 
 bool object_destroy(struct RenderObject *render_object, struct Application *app) {
 	object_destroyshaders(render_object, app);
+	object_destroybuffers(render_object, app);
 	return true;
 }
 
@@ -168,4 +169,8 @@ void object_destroyshaders(struct RenderObject *render_object, struct Applicatio
 
 	vulkan_destroyshaderfile(render_object->vertex_shader_data);
 	vulkan_destroyshaderfile(render_object->fragment_shader_data);
+}
+
+void object_destroybuffers(struct RenderObject *render_object, struct Application *app) {
+	vkDestroyBuffer(app->vulkan_data->device, render_object->vertex_buffer, NULL);
 }

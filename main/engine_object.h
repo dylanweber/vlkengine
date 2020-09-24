@@ -1,3 +1,4 @@
+#include "engine_vertex.h"
 #include "engine_vulkan.h"
 #include "glfw/glfw3.h"
 
@@ -11,12 +12,22 @@
 #define ENGINE_OBJECT_H
 
 struct RenderObject {
+	// Vertex shader
 	char *vertex_shader_path;
 	struct ShaderFile vertex_shader_data;
 	VkShaderModule vertex_shader;
+
+	// Fragment shader
 	char *fragment_shader_path;
 	struct ShaderFile fragment_shader_data;
 	VkShaderModule fragment_shader;
+
+	// Vertices & vertex buffer
+	struct Vertex *vertices;
+	size_t vertices_size;
+	VkBuffer vertex_buffer;
+
+	// Memory allocation information
 	uint16_t retain_count;
 	bool is_static : 1;
 };
@@ -24,6 +35,8 @@ struct RenderObject {
 struct RenderObjectCreateInfo {
 	char *vertex_shader_path;
 	char *fragment_shader_path;
+	struct Vertex *vertices;
+	size_t vertices_size;
 	bool is_static;
 };
 
@@ -49,5 +62,6 @@ bool object_destroy(struct RenderObject *, struct Application *);
 bool object_populateshaders(struct RenderObject *, struct Application *);
 bool object_processshaders(struct RenderObject *, struct Application *);
 void object_destroyshaders(struct RenderObject *, struct Application *);
+void object_destroybuffers(struct RenderObject *, struct Application *);
 
 #endif
