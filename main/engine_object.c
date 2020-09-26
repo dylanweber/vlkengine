@@ -72,7 +72,33 @@ bool objectlink_createshadermodules(struct RenderObjectChain *objects, struct Ap
  * @return size_t Size of object chain
  */
 size_t objectlist_getsize(struct RenderObjectChain *objects) {
+	if (objects == NULL) {
+		fprintf(stderr, "Invalid use of objectlist_getsize(struct RenderObjectChain *)\n");
+		return 0;
+	}
+	if (objects->link == NULL && objects->size != 0) {
+		fprintf(stderr, "RenderObjectChain is corrupted.\n");
+		return 0;
+	}
 	return objects->size;
+}
+
+/**
+ * @brief Gets the head of the linked list
+ *
+ * @param objects Render object chain to get head of
+ * @return struct RenderObjectLink* Head of linked list
+ */
+struct RenderObjectLink *objectlist_gethead(struct RenderObjectChain *objects) {
+	if (objects == NULL) {
+		fprintf(stderr, "Invalid use of objectlist_gethead(struct RenderObjectChain *)\n");
+		return NULL;
+	}
+	if (objects->link == NULL && objects->size != 0) {
+		fprintf(stderr, "RenderObjectChain is corrupted.\n");
+		return NULL;
+	}
+	return objects->link;
 }
 
 /**
@@ -102,6 +128,8 @@ bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_crea
 				 struct RenderObject *render_object) {
 	render_object->vertex_shader_path = ro_create_info->vertex_shader_path;
 	render_object->fragment_shader_path = ro_create_info->fragment_shader_path;
+	render_object->vertices = ro_create_info->vertices;
+	render_object->vertices_size = ro_create_info->vertices_size;
 	render_object->is_static = ro_create_info->is_static;
 	render_object->retain_count = 1;
 	if (object_populateshaders(render_object, app) == false) {

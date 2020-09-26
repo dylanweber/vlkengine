@@ -23,6 +23,6 @@ void vertex_getattributedescriptions(uint32_t *attr_count,
 
 	attr_descriptions[1].binding = 0;
 	attr_descriptions[1].location = 1;
-	attr_descriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+	attr_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attr_descriptions[1].offset = offsetof(struct Vertex, color);
 }

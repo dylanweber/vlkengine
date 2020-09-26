@@ -54,6 +54,7 @@ bool objectlink_init(struct RenderObjectChain *);
 bool objectlink_add(struct RenderObjectChain *, struct RenderObject *);
 bool objectlink_createshadermodules(struct RenderObjectChain *, struct Application *);
 size_t objectlist_getsize(struct RenderObjectChain *);
+struct RenderObjectLink *objectlist_gethead(struct RenderObjectChain *);
 bool objectlink_destroy(struct RenderObjectChain *, struct Application *);
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);
 bool object_retain(struct RenderObject *);

@@ -5,6 +5,7 @@
 #include "hashdata.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -75,6 +76,11 @@ struct VulkanData {
 	uint32_t command_buffers_size;
 	VkCommandBuffer *command_buffers;
 
+	// Memory allocation info
+	uint32_t vertex_buffer_size;
+	uint32_t allocated_memory_size;
+	VkDeviceMemory vertex_buffer_memory;
+
 	// Semaphores for presentation
 	VkSemaphore image_available_sem[MAX_FRAMES_IN_FLIGHT];
 	VkSemaphore render_finished_sem[MAX_FRAMES_IN_FLIGHT];
@@ -118,6 +124,7 @@ bool vulkan_createcommandpool(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);
 bool vulkan_createsynchronization(struct Application *);
 bool vulkan_createvertexbuffers(struct Application *);
+uint32_t vulkan_findmemorytype(struct Application *, uint32_t, VkMemoryPropertyFlags);
 bool vulkan_drawframe(struct Application *);
 
 // Shader functions

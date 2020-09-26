@@ -72,6 +72,12 @@ bool vulkan_init(struct Application *app) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
 	}
+	// Create vertex buffers
+	ret = vulkan_createvertexbuffers(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create vertex buffers.\n");
+		return false;
+	}
 	// Create framebuffers
 	ret = vulkan_createframebuffers(app);
 	if (ret == false) {
@@ -419,7 +425,12 @@ void vulkan_close(struct Application *app) {
 	}
 	free(app->vulkan_data->imgs_in_flight);
 
+	// Clean up swapchain
 	vulkan_cleanupswapchain(app);
+
+	// Free memory
+	// Vertex memory
+	vkFreeMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory, NULL);
 
 	// Destroy command pool
 	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
@@ -961,7 +972,7 @@ bool vulkan_createpipeline(struct Application *app) {
 	}
 
 	// Populate all shader stages
-	struct RenderObjectLink *curr = app->objects->link;
+	struct RenderObjectLink *curr = objectlist_gethead(app->objects);
 	size_t i;
 	for (i = 0; i < 2 * objects_size; i += 2) {
 		// Add vertex shader
@@ -1217,6 +1228,27 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 							 VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(app->vulkan_data->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
 						  app->vulkan_data->graphics_pipeline);
+
+		// Collect vertex buffers from object list
+		struct RenderObjectLink *curr = objectlist_gethead(app->objects);
+		size_t vertex_buffers_size = objectlist_getsize(app->objects);
+		VkBuffer *vertex_buffers = malloc(sizeof(*vertex_buffers) * vertex_buffers_size);
+		VkDeviceSize *offsets = malloc(sizeof(*offsets) * vertex_buffers_size);
+		if (vertex_buffers == NULL) {
+			fprintf(stderr, "Failed to allocate memory.\n");
+			return false;
+		}
+
+		size_t j;
+		for (j = 0; j < vertex_buffers_size; j++) {
+			vertex_buffers[j] = curr->render_object->vertex_buffer;
+			offsets[j] = 0;
+			curr = curr->next;
+		}
+
+		vkCmdBindVertexBuffers(app->vulkan_data->command_buffers[i], 0, vertex_buffers_size,
+							   vertex_buffers, offsets);
+
 		vkCmdDraw(app->vulkan_data->command_buffers[i], 3, 1, 0, 0);
 		vkCmdEndRenderPass(app->vulkan_data->command_buffers[i]);
 		ret = vkEndCommandBuffer(app->vulkan_data->command_buffers[i]);
@@ -1224,6 +1256,9 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 			fprintf(stderr, "Failed to record command buffer.\n");
 			return false;
 		}
+
+		free(vertex_buffers);
+		free(offsets);
 	}
 
 	return true;
@@ -1273,9 +1308,17 @@ bool vulkan_createsynchronization(struct Application *app) {
 
 bool vulkan_createvertexbuffers(struct Application *app) {
 	// Create a vertex buffer for every game object
-	struct RenderObjectLink *curr = app->objects->link;
+	struct RenderObjectLink *curr = objectlist_gethead(app->objects);
 
-	while (curr->next != NULL) {
+	if (curr == NULL) {
+		fprintf(stderr, "Object chain is empty.\n");
+		return false;
+	}
+
+	while (curr != NULL) {
+		app->vulkan_data->vertex_buffer_size +=
+			sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size;
+
 		VkBufferCreateInfo buffer_info = {0};
 
 		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1291,10 +1334,86 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 			return false;
 		}
 
+		if (enable_validation_layers) {
+			printf("Created vertex buffer @ 0x%p\n", curr->render_object->vertex_buffer);
+		}
+
+		curr = curr->next;
+	}
+
+	// Calculate memory to allocate
+	uint32_t mem_total = app->vulkan_data->vertex_buffer_size;
+
+	mem_total /= 16777216;
+	mem_total += 1;
+	mem_total *= 16777216;
+	app->vulkan_data->allocated_memory_size = mem_total;
+
+	// Get memory requirements
+	VkMemoryRequirements mem_requirements;
+	vkGetBufferMemoryRequirements(app->vulkan_data->device,
+								  objectlist_gethead(app->objects)->render_object->vertex_buffer,
+								  &mem_requirements);
+
+	// Allocate memory
+	VkMemoryAllocateInfo alloc_info = {0};
+
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_total;
+	alloc_info.memoryTypeIndex = vulkan_findmemorytype(app, mem_requirements.memoryTypeBits,
+													   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+														   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if (vkAllocateMemory(app->vulkan_data->device, &alloc_info, NULL,
+						 &app->vulkan_data->vertex_buffer_memory) != VK_SUCCESS) {
+		fprintf(stderr, "Failure to allocate physical memory.\n");
+		return false;
+	}
+
+	// Bind buffers to memory
+	VkDeviceSize memory_offset = 0;
+	curr = objectlist_gethead(app->objects);
+
+	while (curr != NULL) {
+		vkBindBufferMemory(app->vulkan_data->device, curr->render_object->vertex_buffer,
+						   app->vulkan_data->vertex_buffer_memory, memory_offset);
+
+		if (enable_validation_layers) {
+			printf("Binded vertex buffer @ 0x%p\n", curr->render_object->vertex_buffer);
+		}
+
+		// Copy vertices into vertex memory map
+		void *buffer_data;
+		vkMapMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory, memory_offset,
+					curr->render_object->vertices_size, 0, &buffer_data);
+		memcpy(buffer_data, curr->render_object->vertices,
+			   curr->render_object->vertices_size * sizeof(*curr->render_object->vertices));
+		vkUnmapMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory);
+
+		memory_offset += curr->render_object->vertices_size;
+
 		curr = curr->next;
 	}
 
 	return true;
+}
+
+uint32_t vulkan_findmemorytype(struct Application *app, uint32_t type_filter,
+							   VkMemoryPropertyFlags properties) {
+	VkPhysicalDeviceMemoryProperties mem_properties;
+
+	vkGetPhysicalDeviceMemoryProperties(app->vulkan_data->physical_device, &mem_properties);
+
+	uint32_t i;
+	for (i = 0; i < mem_properties.memoryTypeCount; i++) {
+		if (type_filter & (1 << i) &&
+			(mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	fprintf(stderr, "Failed to find suitable GPU memory type.\n");
+	return 0;
 }
 
 bool vulkan_drawframe(struct Application *app) {

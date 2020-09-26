@@ -38,8 +38,14 @@ bool application_init(struct Application *app) {
 	objectlink_init(app->objects);
 
 	// Create game objects
+	struct Vertex tri_vertices[3] = {{.pos = {0.0f, -0.5f}, .color = {1.0f, 0.0f, 0.0f}},
+									 {.pos = {0.5f, 0.5f}, .color = {0.0f, 1.0f, 0.0f}},
+									 {.pos = {-0.5f, 0.5f}, .color = {0.0f, 0.0f, 1.0f}}};
 	struct RenderObjectCreateInfo ro_create_info = {.vertex_shader_path = "shaders/shader.vs.spv",
 													.fragment_shader_path = "shaders/shader.fs.spv",
+													.vertices = tri_vertices,
+													.vertices_size = sizeof(tri_vertices) /
+																	 sizeof(*tri_vertices),
 													.is_static = false};
 	struct RenderObject *triangle = malloc(sizeof(*triangle));
 	ret = object_init(app, &ro_create_info, triangle);
