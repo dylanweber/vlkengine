@@ -1239,17 +1239,18 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 			return false;
 		}
 
-		size_t j;
+		size_t j, vertex_count = 0;
 		for (j = 0; j < vertex_buffers_size; j++) {
 			vertex_buffers[j] = curr->render_object->vertex_buffer;
 			offsets[j] = 0;
+			vertex_count += curr->render_object->vertices_size;
 			curr = curr->next;
 		}
 
 		vkCmdBindVertexBuffers(app->vulkan_data->command_buffers[i], 0, vertex_buffers_size,
 							   vertex_buffers, offsets);
 
-		vkCmdDraw(app->vulkan_data->command_buffers[i], 3, 1, 0, 0);
+		vkCmdDraw(app->vulkan_data->command_buffers[i], vertex_count, 1, 0, 0);
 		vkCmdEndRenderPass(app->vulkan_data->command_buffers[i]);
 		ret = vkEndCommandBuffer(app->vulkan_data->command_buffers[i]);
 		if (ret != VK_SUCCESS) {
@@ -1441,6 +1442,7 @@ bool vulkan_drawframe(struct Application *app) {
 	app->vulkan_data->imgs_in_flight[image_index] =
 		app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame];
 
+	// Submit command buffer for presentation
 	VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	VkSubmitInfo submit_info = {0};
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1464,6 +1466,7 @@ bool vulkan_drawframe(struct Application *app) {
 		return false;
 	}
 
+	// Present new frame
 	VkPresentInfoKHR present_info = {0};
 	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	present_info.waitSemaphoreCount = 1;
