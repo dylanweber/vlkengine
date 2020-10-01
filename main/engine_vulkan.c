@@ -52,14 +52,6 @@ bool vulkan_init(struct Application *app) {
 	if (ret == false) {
 		return false;
 	}
-
-	// Create shader modules from all current objects
-	ret = objectlink_createshadermodules(app->objects, app);
-	if (ret == false) {
-		fprintf(stderr, "Failure to create all shader modules.\n");
-		return false;
-	}
-
 	// Create render pass
 	ret = vulkan_createrenderpass(app);
 	if (ret == false) {
@@ -67,7 +59,7 @@ bool vulkan_init(struct Application *app) {
 		return false;
 	}
 	// Create pipeline using shaders
-	ret = vulkan_createpipeline(app);
+	ret = vulkan_create2Dpipeline(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
@@ -461,9 +453,9 @@ bool vulkan_cleanupswapchain(struct Application *app) {
 						 app->vulkan_data->command_buffers_size, app->vulkan_data->command_buffers);
 
 	// Destroy graphics pipeline
-	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->graphics_pipeline, NULL);
+	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->pipeline2d, NULL);
 	// Destroy graphics pipeline layout
-	vkDestroyPipelineLayout(app->vulkan_data->device, app->vulkan_data->pipeline_layout, NULL);
+	vkDestroyPipelineLayout(app->vulkan_data->device, app->vulkan_data->pipeline_layout2d, NULL);
 	// Destroy render pass
 	vkDestroyRenderPass(app->vulkan_data->device, app->vulkan_data->render_pass, NULL);
 
@@ -776,7 +768,7 @@ bool vulkan_recreateswapchain(struct Application *app) {
 		return false;
 	}
 	// Create pipeline using shaders
-	ret = vulkan_createpipeline(app);
+	ret = vulkan_create2Dpipeline(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
@@ -959,38 +951,50 @@ bool vulkan_createimageviews(struct Application *app) {
 	return true;
 }
 
-bool vulkan_createpipeline(struct Application *app) {
+bool vulkan_create2Dpipeline(struct Application *app) {
 	// Get size of game object list
 	size_t objects_size = objectlist_getsize(app->objects);
 
 	// Allocate shader stages
-	VkPipelineShaderStageCreateInfo *shader_stages =
-		calloc(objects_size * 2, sizeof(*shader_stages));
+	VkPipelineShaderStageCreateInfo *shader_stages = calloc(2, sizeof(*shader_stages));
 	if (shader_stages == NULL) {
 		fprintf(stderr, "Failed to allocate memory.\n");
 		return false;
 	}
 
+	// Load specific shaders
+	char filepath[EXECUTE_PATH_LEN];
+
+	// Create filepath from app->execute_path for vertex shader
+	strcpy(filepath, app->execute_path);
+	strcat(filepath, "shaders/shader.vs.spv");
+
+	// Read shader file
+	struct ShaderFile vertex_file = vulkan_readshaderfile(filepath);
+
+	// Create filepath from app->execute_path for fragment shader
+	strcpy(filepath, app->execute_path);
+	strcat(filepath, "shaders/shader.fs.spv");
+
+	// Read shader file
+	struct ShaderFile frag_file = vulkan_readshaderfile(filepath);
+
+	// Create shader modules
+	VkShaderModule vertex_shader = vulkan_createshadermodule(app, vertex_file);
+	VkShaderModule fragment_shader = vulkan_createshadermodule(app, frag_file);
+
 	// Populate all shader stages
-	struct RenderObjectLink *curr = objectlist_gethead(app->objects);
-	size_t i;
-	for (i = 0; i < 2 * objects_size; i += 2) {
-		// Add vertex shader
-		shader_stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shader_stages[i].stage = VK_SHADER_STAGE_VERTEX_BIT;
-		shader_stages[i].module = curr->render_object->vertex_shader;
-		shader_stages[i].pName = "main";
+	// Add vertex shader
+	shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shader_stages[0].module = vertex_shader;
+	shader_stages[0].pName = "main";
 
-		// Add fragment shader
-		shader_stages[i + 1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shader_stages[i + 1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		shader_stages[i + 1].module = curr->render_object->fragment_shader;
-		shader_stages[i + 1].pName = "main";
-
-		// Move to next game object
-		assert(i < 2 * objects_size || curr->next != NULL);
-		curr = curr->next;
-	}
+	// Add fragment shader
+	shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	shader_stages[1].module = fragment_shader;
+	shader_stages[1].pName = "main";
 
 	// Get vertex binding and attribute descriptions
 	VkVertexInputBindingDescription binding_desc = vertex_getbindingdescription();
@@ -1086,7 +1090,7 @@ bool vulkan_createpipeline(struct Application *app) {
 	pipeline_layout_info.pushConstantRangeCount = 0;
 
 	VkResult ret = vkCreatePipelineLayout(app->vulkan_data->device, &pipeline_layout_info, NULL,
-										  &app->vulkan_data->pipeline_layout);
+										  &app->vulkan_data->pipeline_layout2d);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure to create graphics pipeline layout.\n");
 		return false;
@@ -1106,20 +1110,25 @@ bool vulkan_createpipeline(struct Application *app) {
 	pipeline_info.pColorBlendState = &colorblending;
 	pipeline_info.pDynamicState = NULL;
 	// Specify graphics pipeline layout
-	pipeline_info.layout = app->vulkan_data->pipeline_layout;
+	pipeline_info.layout = app->vulkan_data->pipeline_layout2d;
 	pipeline_info.renderPass = app->vulkan_data->render_pass;
 	pipeline_info.subpass = 0;
 	pipeline_info.basePipelineHandle = NULL;
 	pipeline_info.basePipelineIndex = -1;
 
 	ret = vkCreateGraphicsPipelines(app->vulkan_data->device, NULL, 1, &pipeline_info, NULL,
-									&app->vulkan_data->graphics_pipeline);
+									&app->vulkan_data->pipeline2d);
 	if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure to create graphics pipeline.\n");
 		return false;
 	}
 
-	// NOTE: Possible to delete shaders here
+	// Delete shaders since pipeline is created
+	vkDestroyShaderModule(app->vulkan_data->device, vertex_shader, NULL);
+	vkDestroyShaderModule(app->vulkan_data->device, fragment_shader, NULL);
+
+	vulkan_destroyshaderfile(vertex_file);
+	vulkan_destroyshaderfile(frag_file);
 
 	// Free vertex descriptions
 	free(attr_descs);
@@ -1227,7 +1236,7 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 		vkCmdBeginRenderPass(app->vulkan_data->command_buffers[i], &renderpass_info,
 							 VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(app->vulkan_data->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
-						  app->vulkan_data->graphics_pipeline);
+						  app->vulkan_data->pipeline2d);
 
 		// Collect vertex buffers from object list
 		struct RenderObjectLink *curr = objectlist_gethead(app->objects);

@@ -11,16 +11,11 @@
 #ifndef ENGINE_OBJECT_H
 #define ENGINE_OBJECT_H
 
-struct RenderObject {
-	// Vertex shader
-	char *vertex_shader_path;
-	struct ShaderFile vertex_shader_data;
-	VkShaderModule vertex_shader;
+enum PipelineType { NO_PIPELINE = 0, PIPELINE_2D = 1, PIPELINE_3D = 2 };
 
-	// Fragment shader
-	char *fragment_shader_path;
-	struct ShaderFile fragment_shader_data;
-	VkShaderModule fragment_shader;
+struct RenderObject {
+	// Pipeline
+	enum PipelineType pltype;
 
 	// Vertices & vertex buffer
 	struct Vertex *vertices;
@@ -33,8 +28,7 @@ struct RenderObject {
 };
 
 struct RenderObjectCreateInfo {
-	char *vertex_shader_path;
-	char *fragment_shader_path;
+	enum PipelineType pltype;
 	struct Vertex *vertices;
 	size_t vertices_size;
 	bool is_static;
@@ -50,19 +44,38 @@ struct RenderObjectChain {
 	struct RenderObjectLink *link;
 };
 
+struct RenderPipelineObject {
+	struct RenderObject *render_object;
+	struct RenderPipelineObject *next;
+};
+
+struct RenderPipelineLink {
+	struct RenderObjectObject *pipeline_objects;
+	VkPipeline pipeline;
+	struct RenderPipelineLink *next_pipeline;
+};
+
+struct RenderPipelineChain {
+	size_t size;
+	struct RenderPipelineLink *link;
+};
+
+// Object link functions
 bool objectlink_init(struct RenderObjectChain *);
 bool objectlink_add(struct RenderObjectChain *, struct RenderObject *);
-bool objectlink_createshadermodules(struct RenderObjectChain *, struct Application *);
 size_t objectlist_getsize(struct RenderObjectChain *);
 struct RenderObjectLink *objectlist_gethead(struct RenderObjectChain *);
 bool objectlink_destroy(struct RenderObjectChain *, struct Application *);
+
+// Pipeline link functions
+bool pipelinelink_init(struct RenderPipelineChain *);
+bool pipelinelink_add(struct RenderObjectChain *, struct RenderObject *);
+
+// Object functions
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);
 bool object_retain(struct RenderObject *);
 bool object_release(struct RenderObject *);
 bool object_destroy(struct RenderObject *, struct Application *);
-bool object_populateshaders(struct RenderObject *, struct Application *);
-bool object_processshaders(struct RenderObject *, struct Application *);
-void object_destroyshaders(struct RenderObject *, struct Application *);
 void object_destroybuffers(struct RenderObject *, struct Application *);
 
 #endif

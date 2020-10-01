@@ -46,26 +46,6 @@ bool objectlink_add(struct RenderObjectChain *objects, struct RenderObject *rend
 }
 
 /**
- * @brief Goes through the entire object linked list and creates VkShaderModules for all items
- *
- * @param objects Object chain to compile shaders for
- * @param app Current application with a logical Vulkan device
- * @return Success boolean
- */
-bool objectlink_createshadermodules(struct RenderObjectChain *objects, struct Application *app) {
-	struct RenderObjectLink *curr = objects->link;
-
-	while (curr != NULL) {
-		if (object_processshaders(curr->render_object, app) == false) {
-			return false;
-		}
-		curr = curr->next;
-	}
-
-	return true;
-}
-
-/**
  * @brief Retrieves the size of the object chain
  *
  * @param objects Object chain to determine size of
@@ -126,16 +106,11 @@ bool objectlink_destroy(struct RenderObjectChain *objects, struct Application *a
 
 bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_create_info,
 				 struct RenderObject *render_object) {
-	render_object->vertex_shader_path = ro_create_info->vertex_shader_path;
-	render_object->fragment_shader_path = ro_create_info->fragment_shader_path;
+	render_object->pltype = ro_create_info->pltype;
 	render_object->vertices = ro_create_info->vertices;
 	render_object->vertices_size = ro_create_info->vertices_size;
 	render_object->is_static = ro_create_info->is_static;
 	render_object->retain_count = 1;
-	if (object_populateshaders(render_object, app) == false) {
-		fprintf(stderr, "Failure reading shaders.\n");
-		return false;
-	}
 	return true;
 }
 
@@ -156,47 +131,8 @@ bool object_release(struct RenderObject *render_object) {
 }
 
 bool object_destroy(struct RenderObject *render_object, struct Application *app) {
-	object_destroyshaders(render_object, app);
 	object_destroybuffers(render_object, app);
 	return true;
-}
-
-bool object_populateshaders(struct RenderObject *render_object, struct Application *app) {
-	char filepath[EXECUTE_PATH_LEN];
-
-	// Create filepath from app->execute_path for vertex shader
-	strcpy(filepath, app->execute_path);
-	strcat(filepath, render_object->vertex_shader_path);
-
-	// Read shader file
-	render_object->vertex_shader_data = vulkan_readshaderfile(filepath);
-
-	// Create filepath from app->execute_path for fragment shader
-	strcpy(filepath, app->execute_path);
-	strcat(filepath, render_object->fragment_shader_path);
-
-	// Read shader file
-	render_object->fragment_shader_data = vulkan_readshaderfile(filepath);
-
-	// Return success based on if files were read
-	return render_object->vertex_shader_data.size != 0 &&
-		   render_object->fragment_shader_data.size != 0;
-}
-
-bool object_processshaders(struct RenderObject *render_object, struct Application *app) {
-	render_object->vertex_shader =
-		vulkan_createshadermodule(app, render_object->vertex_shader_data);
-	render_object->fragment_shader =
-		vulkan_createshadermodule(app, render_object->fragment_shader_data);
-	return render_object->vertex_shader != NULL && render_object->fragment_shader != NULL;
-}
-
-void object_destroyshaders(struct RenderObject *render_object, struct Application *app) {
-	vkDestroyShaderModule(app->vulkan_data->device, render_object->vertex_shader, NULL);
-	vkDestroyShaderModule(app->vulkan_data->device, render_object->fragment_shader, NULL);
-
-	vulkan_destroyshaderfile(render_object->vertex_shader_data);
-	vulkan_destroyshaderfile(render_object->fragment_shader_data);
 }
 
 void object_destroybuffers(struct RenderObject *render_object, struct Application *app) {

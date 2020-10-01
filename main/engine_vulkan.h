@@ -66,8 +66,10 @@ struct VulkanData {
 
 	// Graphics pipeline
 	VkRenderPass render_pass;
-	VkPipelineLayout pipeline_layout;
-	VkPipeline graphics_pipeline;
+	VkPipelineLayout pipeline_layout2d;
+	VkPipelineLayout pipeline_layout3d;
+	VkPipeline pipeline2d;
+	VkPipeline pipeline3d;
 
 	// Framebuffers & command buffers
 	uint32_t swapchain_framebuffers_size;
@@ -118,7 +120,7 @@ bool vulkan_recreateswapchain(struct Application *);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
 bool vulkan_createrenderpass(struct Application *);
-bool vulkan_createpipeline(struct Application *);
+bool vulkan_create2Dpipeline(struct Application *);
 bool vulkan_createframebuffers(struct Application *);
 bool vulkan_createcommandpool(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);

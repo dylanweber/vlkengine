@@ -41,8 +41,7 @@ bool application_init(struct Application *app) {
 	struct Vertex tri_vertices[3] = {{.pos = {0.0f, -0.5f}, .color = {1.0f, 0.0f, 0.0f}},
 									 {.pos = {0.5f, 0.5f}, .color = {0.0f, 1.0f, 0.0f}},
 									 {.pos = {-0.5f, 0.5f}, .color = {0.0f, 0.0f, 1.0f}}};
-	struct RenderObjectCreateInfo ro_create_info = {.vertex_shader_path = "shaders/shader.vs.spv",
-													.fragment_shader_path = "shaders/shader.fs.spv",
+	struct RenderObjectCreateInfo ro_create_info = {.pltype = PIPELINE_2D,
 													.vertices = tri_vertices,
 													.vertices_size = sizeof(tri_vertices) /
 																	 sizeof(*tri_vertices),
