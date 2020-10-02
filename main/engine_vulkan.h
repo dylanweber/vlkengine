@@ -79,8 +79,8 @@ struct VulkanData {
 	VkCommandBuffer *command_buffers;
 
 	// Memory allocation info
-	uint32_t vertex_buffer_size;
-	uint32_t allocated_memory_size;
+	VkDeviceSize vertex_memory_size;
+	VkDeviceSize allocated_memory_size;
 	VkDeviceMemory vertex_buffer_memory;
 
 	// Semaphores for presentation
@@ -128,6 +128,7 @@ bool vulkan_createsynchronization(struct Application *);
 bool vulkan_createvertexbuffers(struct Application *);
 uint32_t vulkan_findmemorytype(struct Application *, uint32_t, VkMemoryPropertyFlags);
 bool vulkan_drawframe(struct Application *);
+bool vulkan_recorddrawcommands(struct Application *, VkCommandBuffer, struct RenderGroup *);
 
 // Shader functions
 struct ShaderFile vulkan_readshaderfile(const char *);

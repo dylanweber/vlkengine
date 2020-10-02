@@ -16,9 +16,9 @@ int main(int argc, char **argv) {
 	printf("\n");
 
 	struct VulkanData vulkan_data = {0};
-	struct RenderObjectChain chain = {0};
+	struct RenderGroup chain = {0};
 	struct Application app = {
-		.execute_path = {0}, .window = NULL, .vulkan_data = &vulkan_data, .objects = &chain};
+		.execute_path = {0}, .window = NULL, .vulkan_data = &vulkan_data, .render_group = &chain};
 
 	bool ret = application_init(&app);
 	if (ret == false) {

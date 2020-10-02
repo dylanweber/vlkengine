@@ -1,5 +1,7 @@
 #include "engine_object.h"
 
+/*          Object link functions         */
+
 /**
  * @brief Initializes object link
  *
@@ -103,6 +105,122 @@ bool objectlink_destroy(struct RenderObjectChain *objects, struct Application *a
 	objects->size = 0;
 	return true;
 }
+
+/*          Pipeline link functions         */
+
+bool pipelinelink_init(struct RenderPipelineChain *pipeline_chain) {
+	pipeline_chain->pl_sizes = malloc(sizeof(*pipeline_chain->pl_sizes) * NUM_PIPELINES);
+	if (pipeline_chain->pl_sizes == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	pipeline_chain->links = malloc(sizeof(*pipeline_chain->links) * NUM_PIPELINES);
+	if (pipeline_chain->links == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	pipeline_chain->size = NUM_PIPELINES;
+
+	uint32_t i;
+	for (i = 0; i < NUM_PIPELINES; i++) {
+		pipeline_chain->links[i] = NULL;
+		pipeline_chain->pl_sizes[i] = 0;
+	}
+
+	return true;
+}
+
+bool pipelinelink_add(struct RenderPipelineChain *pipeline_chain,
+					  struct RenderObject *render_object) {
+	struct RenderPipelineLink *curr = pipeline_chain->links[render_object->pltype];
+
+	struct RenderPipelineLink *new_link = malloc(sizeof(*new_link));
+	if (new_link == NULL) {
+		fprintf(stderr, "Failed to allocate memory.\n");
+		return false;
+	}
+
+	new_link->render_object = render_object;
+	new_link->next = NULL;
+
+	while (curr != NULL && curr->next != NULL) {
+		curr = curr->next;
+	}
+
+	if (curr == NULL) {
+		pipeline_chain->links[render_object->pltype] = new_link;
+	} else {
+		curr->next = new_link;
+	}
+
+	pipeline_chain->pl_sizes[render_object->pltype]++;
+	return true;
+}
+
+struct RenderPipelineLink *pipelinelink_gethead(struct RenderPipelineChain *pipeline_chain,
+												enum PipelineType pltype) {
+	return pipeline_chain->links[pltype];
+}
+
+size_t pipelinelink_getsize(struct RenderPipelineChain *pipeline_chain, enum PipelineType pltype) {
+	return pipeline_chain->pl_sizes[pltype];
+}
+
+/**
+ * @brief Deletes all links in the pipeline chains for all pipelines
+ *
+ * @param pipeline_chain Pipeline chain to clean
+ * @return Success boolean
+ */
+bool pipelinelink_destroy(struct RenderPipelineChain *pipeline_chain) {
+	struct RenderPipelineLink *curr = NULL, *prev;
+	uint32_t i;
+	for (i = 0; i < NUM_PIPELINES; i++) {
+		curr = pipeline_chain->links[i];
+		if (curr == NULL) {
+			continue;
+		}
+
+		while (curr != NULL) {
+			prev = curr;
+			curr = curr->next;
+			free(prev);
+		}
+	}
+
+	free(pipeline_chain->links);
+	free(pipeline_chain->pl_sizes);
+	return true;
+}
+
+/*          Render group functions         */
+
+bool rendergroup_init(struct RenderGroup *render_group) {
+	render_group->objects = malloc(sizeof(*render_group->objects));
+	render_group->pipelines = malloc(sizeof(*render_group->pipelines));
+
+	return objectlink_init(render_group->objects) && pipelinelink_init(render_group->pipelines);
+}
+
+bool rendergroup_add(struct RenderGroup *render_group, struct RenderObject *render_object) {
+	return objectlink_add(render_group->objects, render_object) &&
+		   pipelinelink_add(render_group->pipelines, render_object);
+}
+
+bool rendergroup_destroy(struct RenderGroup *render_group, struct Application *app) {
+	bool ret = objectlink_destroy(render_group->objects, app) &&
+			   pipelinelink_destroy(render_group->pipelines);
+	if (ret == false)
+		return ret;
+
+	free(render_group->objects);
+	free(render_group->pipelines);
+	return ret;
+}
+
+/*          Render object functions         */
 
 bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_create_info,
 				 struct RenderObject *render_object) {

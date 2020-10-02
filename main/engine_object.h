@@ -11,7 +11,7 @@
 #ifndef ENGINE_OBJECT_H
 #define ENGINE_OBJECT_H
 
-enum PipelineType { NO_PIPELINE = 0, PIPELINE_2D = 1, PIPELINE_3D = 2 };
+enum PipelineType { NO_PIPELINE, PIPELINE_2D, PIPELINE_3D, NUM_PIPELINES };
 
 struct RenderObject {
 	// Pipeline
@@ -21,6 +21,7 @@ struct RenderObject {
 	struct Vertex *vertices;
 	size_t vertices_size;
 	VkBuffer vertex_buffer;
+	VkDeviceSize vertex_alignment;
 
 	// Memory allocation information
 	uint16_t retain_count;
@@ -44,20 +45,20 @@ struct RenderObjectChain {
 	struct RenderObjectLink *link;
 };
 
-struct RenderPipelineObject {
-	struct RenderObject *render_object;
-	struct RenderPipelineObject *next;
-};
-
 struct RenderPipelineLink {
-	struct RenderObjectObject *pipeline_objects;
-	VkPipeline pipeline;
-	struct RenderPipelineLink *next_pipeline;
+	struct RenderObject *render_object;
+	struct RenderPipelineLink *next;
 };
 
 struct RenderPipelineChain {
 	size_t size;
-	struct RenderPipelineLink *link;
+	size_t *pl_sizes;
+	struct RenderPipelineLink **links;
+};
+
+struct RenderGroup {
+	struct RenderPipelineChain *pipelines;
+	struct RenderObjectChain *objects;
 };
 
 // Object link functions
@@ -69,7 +70,14 @@ bool objectlink_destroy(struct RenderObjectChain *, struct Application *);
 
 // Pipeline link functions
 bool pipelinelink_init(struct RenderPipelineChain *);
-bool pipelinelink_add(struct RenderObjectChain *, struct RenderObject *);
+bool pipelinelink_add(struct RenderPipelineChain *, struct RenderObject *);
+struct RenderPipelineLink *pipelinelink_gethead(struct RenderPipelineChain *, enum PipelineType);
+size_t pipelinelink_getsize(struct RenderPipelineChain *, enum PipelineType);
+
+// Render group functions
+bool rendergroup_init(struct RenderGroup *);
+bool rendergroup_add(struct RenderGroup *, struct RenderObject *);
+bool rendergroup_destroy(struct RenderGroup *, struct Application *);
 
 // Object functions
 bool object_init(struct Application *, struct RenderObjectCreateInfo *, struct RenderObject *);

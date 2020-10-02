@@ -952,9 +952,6 @@ bool vulkan_createimageviews(struct Application *app) {
 }
 
 bool vulkan_create2Dpipeline(struct Application *app) {
-	// Get size of game object list
-	size_t objects_size = objectlist_getsize(app->objects);
-
 	// Allocate shader stages
 	VkPipelineShaderStageCreateInfo *shader_stages = calloc(2, sizeof(*shader_stages));
 	if (shader_stages == NULL) {
@@ -1099,7 +1096,7 @@ bool vulkan_create2Dpipeline(struct Application *app) {
 	// Graphics pipeline creation information
 	VkGraphicsPipelineCreateInfo pipeline_info = {0};
 	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipeline_info.stageCount = 2 * objects_size;
+	pipeline_info.stageCount = 2;
 	pipeline_info.pStages = shader_stages;
 	pipeline_info.pVertexInputState = &vertex_input_info;
 	pipeline_info.pInputAssemblyState = &input_assembly;
@@ -1235,40 +1232,60 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 
 		vkCmdBeginRenderPass(app->vulkan_data->command_buffers[i], &renderpass_info,
 							 VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(app->vulkan_data->command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
-						  app->vulkan_data->pipeline2d);
 
-		// Collect vertex buffers from object list
-		struct RenderObjectLink *curr = objectlist_gethead(app->objects);
-		size_t vertex_buffers_size = objectlist_getsize(app->objects);
-		VkBuffer *vertex_buffers = malloc(sizeof(*vertex_buffers) * vertex_buffers_size);
-		VkDeviceSize *offsets = malloc(sizeof(*offsets) * vertex_buffers_size);
-		if (vertex_buffers == NULL) {
-			fprintf(stderr, "Failed to allocate memory.\n");
-			return false;
-		}
+		vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[i], app->render_group);
 
-		size_t j, vertex_count = 0;
-		for (j = 0; j < vertex_buffers_size; j++) {
-			vertex_buffers[j] = curr->render_object->vertex_buffer;
-			offsets[j] = 0;
-			vertex_count += curr->render_object->vertices_size;
-			curr = curr->next;
-		}
+		/* 		vkCmdBindPipeline(app->vulkan_data->command_buffers[i],
+		   VK_PIPELINE_BIND_POINT_GRAPHICS, app->vulkan_data->pipeline2d);
 
-		vkCmdBindVertexBuffers(app->vulkan_data->command_buffers[i], 0, vertex_buffers_size,
-							   vertex_buffers, offsets);
+				vkCmdBindVertexBuffers(app->vulkan_data->command_buffers[i], 0, vertex_buffers_size,
+									   vertex_buffers, offsets);
 
-		vkCmdDraw(app->vulkan_data->command_buffers[i], vertex_count, 1, 0, 0);
+				vkCmdDraw(app->vulkan_data->command_buffers[i], vertex_count, 1, 0, 0); */
 		vkCmdEndRenderPass(app->vulkan_data->command_buffers[i]);
 		ret = vkEndCommandBuffer(app->vulkan_data->command_buffers[i]);
 		if (ret != VK_SUCCESS) {
 			fprintf(stderr, "Failed to record command buffer.\n");
 			return false;
 		}
+	}
 
-		free(vertex_buffers);
-		free(offsets);
+	return true;
+}
+
+bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff,
+							   struct RenderGroup *render_group) {
+	struct RenderPipelineLink *curr = NULL;
+
+	uint32_t i;
+	for (i = 0; i < NUM_PIPELINES; i++) {
+		curr = render_group->pipelines->links[i];
+		if (curr == NULL) {
+			continue;
+		}
+
+		switch (i) {
+			case NO_PIPELINE:
+				break;
+			case PIPELINE_2D:
+				vkCmdBindPipeline(buff, VK_PIPELINE_BIND_POINT_GRAPHICS,
+								  app->vulkan_data->pipeline2d);
+
+				while (curr != NULL) {
+					VkDeviceSize offset = 0;
+					vkCmdBindVertexBuffers(buff, 0, 1, &curr->render_object->vertex_buffer,
+										   &offset);
+					vkCmdDraw(buff, curr->render_object->vertices_size, 1, 0, 0);
+
+					curr = curr->next;
+				}
+
+				break;
+			case PIPELINE_3D:
+				break;
+			default:
+				break;
+		}
 	}
 
 	return true;
@@ -1318,17 +1335,12 @@ bool vulkan_createsynchronization(struct Application *app) {
 
 bool vulkan_createvertexbuffers(struct Application *app) {
 	// Create a vertex buffer for every game object
-	struct RenderObjectLink *curr = objectlist_gethead(app->objects);
-
-	if (curr == NULL) {
-		fprintf(stderr, "Object chain is empty.\n");
-		return false;
-	}
+	struct RenderPipelineLink *curr =
+		pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
+	uint32_t mem_type_bits = 0;
 
 	while (curr != NULL) {
-		app->vulkan_data->vertex_buffer_size +=
-			sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size;
-
+		// Create buffer
 		VkBufferCreateInfo buffer_info = {0};
 
 		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1348,29 +1360,29 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 			printf("Created vertex buffer @ 0x%p\n", curr->render_object->vertex_buffer);
 		}
 
+		// Get memory requirements
+		VkMemoryRequirements mem_requirements;
+		vkGetBufferMemoryRequirements(app->vulkan_data->device, curr->render_object->vertex_buffer,
+									  &mem_requirements);
+		mem_type_bits |= mem_requirements.memoryTypeBits;
+		curr->render_object->vertex_alignment = mem_requirements.alignment;
+
+		// Calculate vertex buffer size considering alignment
+		app->vulkan_data->vertex_memory_size +=
+			mem_requirements.alignment *
+			((sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size) /
+				 mem_requirements.alignment +
+			 1);
+
 		curr = curr->next;
 	}
-
-	// Calculate memory to allocate
-	uint32_t mem_total = app->vulkan_data->vertex_buffer_size;
-
-	mem_total /= 16777216;
-	mem_total += 1;
-	mem_total *= 16777216;
-	app->vulkan_data->allocated_memory_size = mem_total;
-
-	// Get memory requirements
-	VkMemoryRequirements mem_requirements;
-	vkGetBufferMemoryRequirements(app->vulkan_data->device,
-								  objectlist_gethead(app->objects)->render_object->vertex_buffer,
-								  &mem_requirements);
 
 	// Allocate memory
 	VkMemoryAllocateInfo alloc_info = {0};
 
 	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	alloc_info.allocationSize = mem_total;
-	alloc_info.memoryTypeIndex = vulkan_findmemorytype(app, mem_requirements.memoryTypeBits,
+	alloc_info.allocationSize = app->vulkan_data->vertex_memory_size;
+	alloc_info.memoryTypeIndex = vulkan_findmemorytype(app, mem_type_bits,
 													   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 														   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -1380,9 +1392,11 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 		return false;
 	}
 
+	app->vulkan_data->allocated_memory_size += app->vulkan_data->vertex_memory_size;
+
 	// Bind buffers to memory
 	VkDeviceSize memory_offset = 0;
-	curr = objectlist_gethead(app->objects);
+	curr = pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
 
 	while (curr != NULL) {
 		vkBindBufferMemory(app->vulkan_data->device, curr->render_object->vertex_buffer,
@@ -1400,7 +1414,11 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 			   curr->render_object->vertices_size * sizeof(*curr->render_object->vertices));
 		vkUnmapMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory);
 
-		memory_offset += curr->render_object->vertices_size;
+		memory_offset +=
+			curr->render_object->vertex_alignment *
+			((sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size) /
+				 curr->render_object->vertex_alignment +
+			 1);
 
 		curr = curr->next;
 	}

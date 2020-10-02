@@ -35,7 +35,7 @@ bool application_init(struct Application *app) {
 	printf("Created window @ 0x%p\n", app->window);
 
 	// Initialize game object list
-	objectlink_init(app->objects);
+	rendergroup_init(app->render_group);
 
 	// Create game objects
 	struct Vertex tri_vertices[3] = {{.pos = {0.0f, -0.5f}, .color = {1.0f, 0.0f, 0.0f}},
@@ -53,7 +53,23 @@ bool application_init(struct Application *app) {
 		return false;
 	}
 
-	objectlink_add(app->objects, triangle);
+	struct Vertex tri2_vertices[3] = {{.pos = {0.2f, -0.2f}, .color = {0.0f, 1.0f, 0.0f}},
+									  {.pos = {0.2f, 0.2f}, .color = {1.0f, 1.0f, 1.0f}},
+									  {.pos = {-0.2f, 0.2f}, .color = {1.0f, 1.0f, 1.0f}}};
+	struct RenderObjectCreateInfo ro2_create_info = {.pltype = PIPELINE_2D,
+													 .vertices = tri2_vertices,
+													 .vertices_size = sizeof(tri2_vertices) /
+																	  sizeof(*tri2_vertices),
+													 .is_static = false};
+	struct RenderObject *triangle2 = malloc(sizeof(*triangle2));
+	ret = object_init(app, &ro2_create_info, triangle2);
+	if (ret == false) {
+		fprintf(stderr, "Failure initializing object.\n");
+		return false;
+	}
+
+	rendergroup_add(app->render_group, triangle);
+	rendergroup_add(app->render_group, triangle2);
 
 	// Init Vulkan
 	ret = vulkan_init(app);
@@ -113,7 +129,7 @@ void application_refresh(GLFWwindow *window) {
 
 void application_close(struct Application *app) {
 	// Destroy objects
-	objectlink_destroy(app->objects, app);
+	rendergroup_destroy(app->render_group, app);
 	// Close Vulkan instance
 	vulkan_close(app);
 	// End window & GLFW
