@@ -128,7 +128,8 @@ bool vulkan_createsynchronization(struct Application *);
 bool vulkan_createvertexbuffers(struct Application *);
 uint32_t vulkan_findmemorytype(struct Application *, uint32_t, VkMemoryPropertyFlags);
 bool vulkan_drawframe(struct Application *);
-bool vulkan_recorddrawcommands(struct Application *, VkCommandBuffer, struct RenderGroup *);
+bool vulkan_recorddrawcommands(struct Application *, VkCommandBuffer, VkFramebuffer,
+							   struct RenderGroup *);
 
 // Shader functions
 struct ShaderFile vulkan_readshaderfile(const char *);

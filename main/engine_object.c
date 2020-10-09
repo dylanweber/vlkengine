@@ -225,8 +225,17 @@ bool rendergroup_destroy(struct RenderGroup *render_group, struct Application *a
 bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_create_info,
 				 struct RenderObject *render_object) {
 	render_object->pltype = ro_create_info->pltype;
-	render_object->vertices = ro_create_info->vertices;
 	render_object->vertices_size = ro_create_info->vertices_size;
+	render_object->vertices =
+		malloc(sizeof(*render_object->vertices) * render_object->vertices_size);
+	if (render_object->vertices == NULL) {
+		fprintf(stderr, "Failure to allocate memory.\n");
+		return false;
+	}
+
+	memcpy(render_object->vertices, ro_create_info->vertices,
+		   sizeof(*render_object->vertices) * ro_create_info->vertices_size);
+
 	render_object->is_static = ro_create_info->is_static;
 	render_object->retain_count = 1;
 	return true;
@@ -240,6 +249,7 @@ bool object_retain(struct RenderObject *render_object) {
 }
 
 bool object_release(struct RenderObject *render_object) {
+	free(render_object->vertices);
 	if (render_object->is_static == true)
 		return true;
 	render_object->retain_count--;

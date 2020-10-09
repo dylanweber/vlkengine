@@ -1210,51 +1210,37 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 
 	uint32_t i;
 	for (i = 0; i < app->vulkan_data->command_buffers_size; i++) {
-		VkCommandBufferBeginInfo begin_info = {0};
-		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-		ret = vkBeginCommandBuffer(app->vulkan_data->command_buffers[i], &begin_info);
-		if (ret != VK_SUCCESS) {
-			fprintf(stderr, "Failure to begin recording to command buffer.\n");
-			return false;
-		}
-
-		VkRenderPassBeginInfo renderpass_info = {0};
-		renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderpass_info.renderPass = app->vulkan_data->render_pass;
-		renderpass_info.framebuffer = app->vulkan_data->swapchain_framebuffers[i];
-		renderpass_info.renderArea.offset = (VkOffset2D){0, 0};
-		renderpass_info.renderArea.extent = app->vulkan_data->swapchain_extent;
-
-		VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-		renderpass_info.clearValueCount = 1;
-		renderpass_info.pClearValues = &clear_color;
-
-		vkCmdBeginRenderPass(app->vulkan_data->command_buffers[i], &renderpass_info,
-							 VK_SUBPASS_CONTENTS_INLINE);
-
-		vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[i], app->render_group);
-
-		/* 		vkCmdBindPipeline(app->vulkan_data->command_buffers[i],
-		   VK_PIPELINE_BIND_POINT_GRAPHICS, app->vulkan_data->pipeline2d);
-
-				vkCmdBindVertexBuffers(app->vulkan_data->command_buffers[i], 0, vertex_buffers_size,
-									   vertex_buffers, offsets);
-
-				vkCmdDraw(app->vulkan_data->command_buffers[i], vertex_count, 1, 0, 0); */
-		vkCmdEndRenderPass(app->vulkan_data->command_buffers[i]);
-		ret = vkEndCommandBuffer(app->vulkan_data->command_buffers[i]);
-		if (ret != VK_SUCCESS) {
-			fprintf(stderr, "Failed to record command buffer.\n");
-			return false;
-		}
+		vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[i],
+								  app->vulkan_data->swapchain_framebuffers[i], app->render_group);
 	}
 
 	return true;
 }
 
-bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff,
+bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, VkFramebuffer frame,
 							   struct RenderGroup *render_group) {
+	VkCommandBufferBeginInfo begin_info = {0};
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	VkResult ret = vkBeginCommandBuffer(buff, &begin_info);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to begin recording to command buffer.\n");
+		return false;
+	}
+
+	VkRenderPassBeginInfo renderpass_info = {0};
+	renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderpass_info.renderPass = app->vulkan_data->render_pass;
+	renderpass_info.framebuffer = frame;
+	renderpass_info.renderArea.offset = (VkOffset2D){0, 0};
+	renderpass_info.renderArea.extent = app->vulkan_data->swapchain_extent;
+
+	VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+	renderpass_info.clearValueCount = 1;
+	renderpass_info.pClearValues = &clear_color;
+
+	vkCmdBeginRenderPass(buff, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
 	struct RenderPipelineLink *curr = NULL;
 
 	uint32_t i;
@@ -1286,6 +1272,13 @@ bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff,
 			default:
 				break;
 		}
+	}
+
+	vkCmdEndRenderPass(buff);
+	ret = vkEndCommandBuffer(buff);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to record command buffer.\n");
+		return false;
 	}
 
 	return true;
