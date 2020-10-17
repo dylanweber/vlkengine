@@ -5,6 +5,7 @@
 const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 const char *validation_extensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 const char *validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
+const char *shader_files[] = {"shaders/shader2d.vs.spv", "shaders/shader2d.fs.spv"};
 
 bool vulkan_init(struct Application *app) {
 	bool ret = vulkan_checkextensions();
@@ -58,12 +59,27 @@ bool vulkan_init(struct Application *app) {
 		fprintf(stderr, "Failure to create render pass.\n");
 		return false;
 	}
+	// Retrieve shaders
+	ret = vulkan_createshaders(app);
+	if (ret == false) {
+		fprintf(stderr, "Failure creating shader modules.\n");
+		return false;
+	}
 	// Create pipeline using shaders
 	ret = vulkan_create2Dpipeline(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
 	}
+
+	// Set up GPU memory allocation
+	ret = vkmemory_init(&app->vulkan_data->vmemory, app->vulkan_data->physical_device,
+						app->vulkan_data->device);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create GPU memory allocator.\n");
+		return false;
+	}
+
 	// Create vertex buffers
 	ret = vulkan_createvertexbuffers(app);
 	if (ret == false) {
@@ -407,6 +423,11 @@ bool vulkan_checkvalidationlayers() {
 void vulkan_close(struct Application *app) {
 	uint32_t i;	 // Loop index variable for destruction
 
+	// Destroy cached shader modules
+	for (i = 0; i < NUM_SHADER_CACHE; i++) {
+		vkDestroyShaderModule(app->vulkan_data->device, app->vulkan_data->shadercache[i], NULL);
+	}
+
 	// Destroy sempahores & fences
 	for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(app->vulkan_data->device, app->vulkan_data->render_finished_sem[i],
@@ -420,9 +441,8 @@ void vulkan_close(struct Application *app) {
 	// Clean up swapchain
 	vulkan_cleanupswapchain(app);
 
-	// Free memory
-	// Vertex memory
-	vkFreeMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory, NULL);
+	// Free GPU memory
+	vkmemory_destroy(&app->vulkan_data->vmemory);
 
 	// Destroy command pool
 	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
@@ -951,6 +971,20 @@ bool vulkan_createimageviews(struct Application *app) {
 	return true;
 }
 
+bool vulkan_createshaders(struct Application *app) {
+	struct ShaderFile shader_contents;
+	char filepath[EXECUTE_PATH_LEN];
+	int i;
+	for (i = 0; i < NUM_SHADER_CACHE; i++) {
+		strcpy(filepath, app->execute_path);
+		strcat(filepath, shader_files[i]);
+		shader_contents = vulkan_readshaderfile(filepath);
+		app->vulkan_data->shadercache[i] = vulkan_createshadermodule(app, shader_contents);
+		vulkan_destroyshaderfile(shader_contents);
+	}
+	return true;
+}
+
 bool vulkan_create2Dpipeline(struct Application *app) {
 	// Allocate shader stages
 	VkPipelineShaderStageCreateInfo *shader_stages = calloc(2, sizeof(*shader_stages));
@@ -959,26 +993,9 @@ bool vulkan_create2Dpipeline(struct Application *app) {
 		return false;
 	}
 
-	// Load specific shaders
-	char filepath[EXECUTE_PATH_LEN];
-
-	// Create filepath from app->execute_path for vertex shader
-	strcpy(filepath, app->execute_path);
-	strcat(filepath, "shaders/shader.vs.spv");
-
-	// Read shader file
-	struct ShaderFile vertex_file = vulkan_readshaderfile(filepath);
-
-	// Create filepath from app->execute_path for fragment shader
-	strcpy(filepath, app->execute_path);
-	strcat(filepath, "shaders/shader.fs.spv");
-
-	// Read shader file
-	struct ShaderFile frag_file = vulkan_readshaderfile(filepath);
-
-	// Create shader modules
-	VkShaderModule vertex_shader = vulkan_createshadermodule(app, vertex_file);
-	VkShaderModule fragment_shader = vulkan_createshadermodule(app, frag_file);
+	// Get shader modules from cache
+	VkShaderModule vertex_shader = app->vulkan_data->shadercache[VERTEX_SHADER_2D];
+	VkShaderModule fragment_shader = app->vulkan_data->shadercache[FRAGMENT_SHADER_2D];
 
 	// Populate all shader stages
 	// Add vertex shader
@@ -1120,13 +1137,6 @@ bool vulkan_create2Dpipeline(struct Application *app) {
 		return false;
 	}
 
-	// Delete shaders since pipeline is created
-	vkDestroyShaderModule(app->vulkan_data->device, vertex_shader, NULL);
-	vkDestroyShaderModule(app->vulkan_data->device, fragment_shader, NULL);
-
-	vulkan_destroyshaderfile(vertex_file);
-	vulkan_destroyshaderfile(frag_file);
-
 	// Free vertex descriptions
 	free(attr_descs);
 
@@ -1174,7 +1184,7 @@ bool vulkan_createcommandpool(struct Application *app) {
 	VkCommandPoolCreateInfo pool_info = {0};
 	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
-	pool_info.flags = 0;
+	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	VkResult ret = vkCreateCommandPool(app->vulkan_data->device, &pool_info, NULL,
 									   &app->vulkan_data->command_pool);
@@ -1208,11 +1218,12 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 		return false;
 	}
 
-	uint32_t i;
+	// Record commands on command buffers
+	/*uint32_t i;
 	for (i = 0; i < app->vulkan_data->command_buffers_size; i++) {
 		vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[i],
 								  app->vulkan_data->swapchain_framebuffers[i], app->render_group);
-	}
+	}*/
 
 	return true;
 }
@@ -1221,6 +1232,10 @@ bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, Vk
 							   struct RenderGroup *render_group) {
 	VkCommandBufferBeginInfo begin_info = {0};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	// Reset command buffer
+	VkCommandBufferResetFlagBits reset_bits = 0;
+	vkResetCommandBuffer(buff, reset_bits);
 
 	VkResult ret = vkBeginCommandBuffer(buff, &begin_info);
 	if (ret != VK_SUCCESS) {
@@ -1259,9 +1274,9 @@ bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, Vk
 
 				while (curr != NULL) {
 					VkDeviceSize offset = 0;
-					vkCmdBindVertexBuffers(buff, 0, 1, &curr->render_object->vertex_buffer,
+					vkCmdBindVertexBuffers(buff, 0, 1, &curr->render_object->render_data.vi_buffer,
 										   &offset);
-					vkCmdDraw(buff, curr->render_object->vertices_size, 1, 0, 0);
+					vkCmdDraw(buff, curr->render_object->render_data.vertices_size, 1, 0, 0);
 
 					curr = curr->next;
 				}
@@ -1327,6 +1342,11 @@ bool vulkan_createsynchronization(struct Application *app) {
 }
 
 bool vulkan_createvertexbuffers(struct Application *app) {
+
+	return true;
+}
+
+/*bool vulkan_createvertexbuffers(struct Application *app) {
 	// Create a vertex buffer for every game object
 	struct RenderPipelineLink *curr =
 		pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
@@ -1417,7 +1437,7 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 	}
 
 	return true;
-}
+}*/
 
 uint32_t vulkan_findmemorytype(struct Application *app, uint32_t type_filter,
 							   VkMemoryPropertyFlags properties) {
@@ -1451,7 +1471,7 @@ bool vulkan_drawframe(struct Application *app) {
 		vulkan_recreateswapchain(app);
 		return true;
 	} else if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-		fprintf(stderr, "Failure to aquire swap chain image.\n");
+		fprintf(stderr, "Failure to acquire swap chain image.\n");
 		return false;
 	}
 
@@ -1461,6 +1481,11 @@ bool vulkan_drawframe(struct Application *app) {
 	}
 	app->vulkan_data->imgs_in_flight[image_index] =
 		app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame];
+
+	// Rerecord command buffers
+	vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[image_index],
+							  app->vulkan_data->swapchain_framebuffers[image_index],
+							  app->render_group);
 
 	// Submit command buffer for presentation
 	VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};

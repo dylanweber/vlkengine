@@ -9,7 +9,7 @@ find_program(
 	REQUIRED
 )
 
-file (GLOB SOURCES "*shader.*")
+file (GLOB SOURCES "*shader*.*")
 
 add_custom_target(
 		shaders ALL

@@ -18,6 +18,8 @@ set(SOURCES main.c
 			engine_object.h
 			engine_vertex.c
 			engine_vertex.h
+			engine_vkmemory.c
+			engine_vkmemory.h
 			hashdata.c
 			hashdata.h
 			config.h)

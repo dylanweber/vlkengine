@@ -1,3 +1,4 @@
+#include "application.h"
 #include "engine_vertex.h"
 #include "engine_vulkan.h"
 #include "glfw/glfw3.h"
@@ -11,17 +12,63 @@
 #ifndef ENGINE_OBJECT_H
 #define ENGINE_OBJECT_H
 
-enum PipelineType { NO_PIPELINE, PIPELINE_2D, PIPELINE_3D, NUM_PIPELINES };
+union UniformData {
+	struct u2d {
+		float translate[4];
+		float rotation[4];
+		float scale[4];
+	};
+	struct u3d {
+		float model[16];
+		float view[16];
+		float projection[16];
+	};
+};
 
-struct RenderObject {
+/*
+	How RenderData would eventually be drawn when properly bound via command buffer:
+
+	> vkCmdBindDescriptorSets(buff, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &descriptor_set,
+		1, &uniform_position);
+	> vkCmdDrawIndexed(buff, indices_size, 1, indices_position, vertex_position, 0);
+
+*/
+
+struct RenderData {
 	// Pipeline
 	enum PipelineType pltype;
 
-	// Vertices & vertex buffer
+	// Vertex & index buffer
+	VkBuffer vi_buffer;
+
+	// Vertices
 	struct Vertex *vertices;
 	size_t vertices_size;
-	VkBuffer vertex_buffer;
 	VkDeviceSize vertex_alignment;
+	VkDeviceSize vertex_position;
+
+	// Indices
+	uint64_t *indices;
+	size_t indices_size;
+	VkDeviceSize indices_alignment;
+	VkDeviceSize indices_position;
+
+	// Uniform buffer as descriptor set
+	VkBuffer uni_buffer;
+	VkDescriptorSet desc_set;
+
+	// Uniforms
+	union UniformData *uniforms;
+	size_t uniform_size;
+	VkDeviceSize uniform_alignment;
+	VkDeviceSize uniform_position;
+};
+
+struct RenderObject {
+	struct RenderData render_data;
+
+	// x, y, z position
+	float pos[3];
 
 	// Memory allocation information
 	uint16_t retain_count;

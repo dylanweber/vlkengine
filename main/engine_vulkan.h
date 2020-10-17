@@ -1,6 +1,7 @@
 #include "application.h"
 #include "config.h"
 #include "engine_vertex.h"
+#include "engine_vkmemory.h"
 #include "glfw/glfw3.h"
 #include "hashdata.h"
 
@@ -19,6 +20,9 @@
 #define PRESENT_INDICES_SIZE 1
 #define MAX_FRAMES_IN_FLIGHT 2
 #define VULKAN_HASHSET_SIZE 32
+
+enum PipelineType { NO_PIPELINE, PIPELINE_2D, PIPELINE_3D, NUM_PIPELINES };
+enum ShaderCache { VERTEX_SHADER_2D, FRAGMENT_SHADER_2D, NUM_SHADER_CACHE };
 
 struct QueueFamilies {
 	uint32_t graphics_count;
@@ -70,6 +74,7 @@ struct VulkanData {
 	VkPipelineLayout pipeline_layout3d;
 	VkPipeline pipeline2d;
 	VkPipeline pipeline3d;
+	VkShaderModule shadercache[NUM_SHADER_CACHE];
 
 	// Framebuffers & command buffers
 	uint32_t swapchain_framebuffers_size;
@@ -79,9 +84,9 @@ struct VulkanData {
 	VkCommandBuffer *command_buffers;
 
 	// Memory allocation info
-	VkDeviceSize vertex_memory_size;
-	VkDeviceSize allocated_memory_size;
-	VkDeviceMemory vertex_buffer_memory;
+	struct VulkanMemory vmemory;
+
+	// Rendering information
 
 	// Semaphores for presentation
 	VkSemaphore image_available_sem[MAX_FRAMES_IN_FLIGHT];
@@ -120,6 +125,7 @@ bool vulkan_recreateswapchain(struct Application *);
 bool vulkan_createswapchain(struct Application *);
 bool vulkan_createimageviews(struct Application *);
 bool vulkan_createrenderpass(struct Application *);
+bool vulkan_createshaders(struct Application *);
 bool vulkan_create2Dpipeline(struct Application *);
 bool vulkan_createframebuffers(struct Application *);
 bool vulkan_createcommandpool(struct Application *);
@@ -147,4 +153,4 @@ VkResult vulkan_createdebugutilsmessenger(VkInstance, const VkDebugUtilsMessenge
 VkResult vulkan_destroydebugutilsmessenger(VkInstance, VkDebugUtilsMessengerEXT,
 										   const VkAllocationCallbacks *);
 
-#endif
+#endif	// ENGINE_VULKAN_H

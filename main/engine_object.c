@@ -134,7 +134,7 @@ bool pipelinelink_init(struct RenderPipelineChain *pipeline_chain) {
 
 bool pipelinelink_add(struct RenderPipelineChain *pipeline_chain,
 					  struct RenderObject *render_object) {
-	struct RenderPipelineLink *curr = pipeline_chain->links[render_object->pltype];
+	struct RenderPipelineLink *curr = pipeline_chain->links[render_object->render_data.pltype];
 
 	struct RenderPipelineLink *new_link = malloc(sizeof(*new_link));
 	if (new_link == NULL) {
@@ -150,12 +150,12 @@ bool pipelinelink_add(struct RenderPipelineChain *pipeline_chain,
 	}
 
 	if (curr == NULL) {
-		pipeline_chain->links[render_object->pltype] = new_link;
+		pipeline_chain->links[render_object->render_data.pltype] = new_link;
 	} else {
 		curr->next = new_link;
 	}
 
-	pipeline_chain->pl_sizes[render_object->pltype]++;
+	pipeline_chain->pl_sizes[render_object->render_data.pltype]++;
 	return true;
 }
 
@@ -224,17 +224,17 @@ bool rendergroup_destroy(struct RenderGroup *render_group, struct Application *a
 
 bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_create_info,
 				 struct RenderObject *render_object) {
-	render_object->pltype = ro_create_info->pltype;
-	render_object->vertices_size = ro_create_info->vertices_size;
-	render_object->vertices =
-		malloc(sizeof(*render_object->vertices) * render_object->vertices_size);
-	if (render_object->vertices == NULL) {
+	render_object->render_data.pltype = ro_create_info->pltype;
+	render_object->render_data.vertices_size = ro_create_info->vertices_size;
+	render_object->render_data.vertices = malloc(sizeof(*render_object->render_data.vertices) *
+												 render_object->render_data.vertices_size);
+	if (render_object->render_data.vertices == NULL) {
 		fprintf(stderr, "Failure to allocate memory.\n");
 		return false;
 	}
 
-	memcpy(render_object->vertices, ro_create_info->vertices,
-		   sizeof(*render_object->vertices) * ro_create_info->vertices_size);
+	memcpy(render_object->render_data.vertices, ro_create_info->vertices,
+		   sizeof(*render_object->render_data.vertices) * ro_create_info->vertices_size);
 
 	render_object->is_static = ro_create_info->is_static;
 	render_object->retain_count = 1;
@@ -249,7 +249,7 @@ bool object_retain(struct RenderObject *render_object) {
 }
 
 bool object_release(struct RenderObject *render_object) {
-	free(render_object->vertices);
+	free(render_object->render_data.vertices);
 	if (render_object->is_static == true)
 		return true;
 	render_object->retain_count--;
@@ -264,5 +264,5 @@ bool object_destroy(struct RenderObject *render_object, struct Application *app)
 }
 
 void object_destroybuffers(struct RenderObject *render_object, struct Application *app) {
-	vkDestroyBuffer(app->vulkan_data->device, render_object->vertex_buffer, NULL);
+	vkmemory_destroybuffer(&app->vulkan_data->vmemory, render_object->render_data.vi_buffer);
 }

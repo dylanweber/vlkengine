@@ -99,9 +99,6 @@ void application_loopevent(struct Application *app) {
 
 	// Poll for events like keyboard & mouse
 	glfwPollEvents();
-
-	// Wait for queue to idle
-	vkQueueWaitIdle(app->vulkan_data->present_queue);
 }
 
 void application_resize(GLFWwindow *window, int width, int height) {
