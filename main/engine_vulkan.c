@@ -1274,8 +1274,8 @@ bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, Vk
 
 				while (curr != NULL) {
 					VkDeviceSize offset = 0;
-					vkCmdBindVertexBuffers(buff, 0, 1, &curr->render_object->render_data.vi_buffer,
-										   &offset);
+					vkCmdBindVertexBuffers(
+						buff, 0, 1, &curr->render_object->render_data.vi_buffer->buffer, &offset);
 					vkCmdDraw(buff, curr->render_object->render_data.vertices_size, 1, 0, 0);
 
 					curr = curr->next;
@@ -1342,6 +1342,31 @@ bool vulkan_createsynchronization(struct Application *app) {
 }
 
 bool vulkan_createvertexbuffers(struct Application *app) {
+	struct RenderPipelineLink *curr =
+		pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
+
+	while (curr != NULL) {
+		struct VulkanBuffer *buff;
+		bool ret = vkmemory_createbuffer(
+			&app->vulkan_data->vmemory, curr->render_object->render_data.vertices_size,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &buff);
+		if (ret == false) {
+			fprintf(stderr, "Failure allocating vertex buffers.\n");
+			return false;
+		}
+
+		curr->render_object->render_data.vi_buffer = buff;
+
+		void *buffer_data;
+		vkmemory_mapbuffer(&app->vulkan_data->vmemory, buff, &buffer_data);
+		memcpy(buffer_data, curr->render_object->render_data.vertices,
+			   curr->render_object->render_data.vertices_size *
+				   sizeof(*curr->render_object->render_data.vertices));
+		vkmemory_unmapbuffer(&app->vulkan_data->vmemory, buff);
+
+		curr = curr->next;
+	}
 
 	return true;
 }

@@ -1,4 +1,5 @@
 #include "application.h"
+#include "config.h"
 #include "glfw/glfw3.h"
 
 #include <pthread.h>
@@ -16,6 +17,7 @@ struct VulkanBuffer {
 	size_t buffer_size;
 	VkDeviceSize start;
 	VkDeviceSize end;
+	struct VulkanAllocation *allocation;
 	struct VulkanBuffer *next;
 };
 
@@ -39,12 +41,14 @@ bool vkmemory_destroy(struct VulkanMemory *);
 
 // Buffer functions
 bool vkmemory_createbuffer(struct VulkanMemory *, VkDeviceSize, VkBufferUsageFlags,
-						   VkMemoryPropertyFlags, VkBuffer *);
-bool vkmemory_destroybuffer(struct VulkanMemory *, VkBuffer);
+						   VkMemoryPropertyFlags, struct VulkanBuffer **);
+bool vkmemory_destroybuffer(struct VulkanMemory *, struct VulkanBuffer *);
+bool vkmemory_mapbuffer(struct VulkanMemory *, struct VulkanBuffer *, void **);
+bool vkmemory_unmapbuffer(struct VulkanMemory *, struct VulkanBuffer *);
 
 // Helper functions
 uint32_t vkmemory_findmemorytype(VkPhysicalDevice, uint32_t, VkMemoryPropertyFlags);
-struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer, VkDeviceSize, VkDeviceSize,
-												 VkDeviceSize);
+struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer, struct VulkanAllocation *, VkDeviceSize,
+												 VkDeviceSize, VkDeviceSize);
 
 #endif	// ENGINE_VKMEMORY_H

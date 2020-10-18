@@ -36,7 +36,11 @@ bool vkmemory_destroy(struct VulkanMemory *vmem) {
 
 bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 						   VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-						   VkBuffer *buff) {
+						   struct VulkanBuffer **struct_buff) {
+	if (enable_validation_layers) {
+		printf("Creating GPU buffer...\n");
+	}
+
 	// Create buffer before allocation
 	VkBufferCreateInfo buffer_info = {0};
 
@@ -46,14 +50,16 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	buffer_info.flags = 0;
 
-	if (vkCreateBuffer(vmem->device, &buffer_info, NULL, buff) != VK_SUCCESS) {
+	VkBuffer buff;
+
+	if (vkCreateBuffer(vmem->device, &buffer_info, NULL, &buff) != VK_SUCCESS) {
 		fprintf(stderr, "Failured creating buffer before allocation.\n");
 		return false;
 	}
 
 	// Get memory requirements
 	VkMemoryRequirements mem_requirements;
-	vkGetBufferMemoryRequirements(vmem->device, *buff, &mem_requirements);
+	vkGetBufferMemoryRequirements(vmem->device, buff, &mem_requirements);
 
 	uint32_t desired_index =
 		vkmemory_findmemorytype(vmem->physical_device, mem_requirements.memoryTypeBits, properties);
@@ -79,7 +85,7 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 					if (bcurr->start > aligned_size) {
 						// Insert new buffer
 						vk_buff = curr->buffers =
-							vkmemory_createbufferstruct(*buff, aligned_size, 0, aligned_size);
+							vkmemory_createbufferstruct(buff, curr, aligned_size, 0, aligned_size);
 						// Set next buffer to previous first buffer
 						curr->buffers->next = bcurr;
 						break;
@@ -91,7 +97,7 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 					if (bprev->end - bcurr->start > aligned_size) {
 						// Insert new buffer
 						vk_buff = bprev->next = vkmemory_createbufferstruct(
-							*buff, aligned_size, bprev->end, bprev->end + aligned_size);
+							buff, curr, aligned_size, bprev->end, bprev->end + aligned_size);
 						// Set next buffer to previous next buffer
 						bprev->next->next = bcurr;
 						break;
@@ -99,11 +105,12 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 				}
 
 				// If we're at the end
-				if (bprev != NULL && bcurr == NULL) {
+				if (bcurr->next == NULL) {
 					// Insert new buffer
-					vk_buff = bprev->next = vkmemory_createbufferstruct(
-						*buff, aligned_size, bprev->end, bprev->end + aligned_size);
-					bprev->next->next = NULL;
+					vk_buff = bcurr->next = vkmemory_createbufferstruct(
+						buff, curr, aligned_size, bcurr->end, bcurr->end + aligned_size);
+					bcurr->next->next = NULL;
+					break;
 				}
 
 				bprev = bcurr;
@@ -116,8 +123,9 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		curr = curr->next;
 	}
 
-	// No memory exists, must allocate
-	if (curr == NULL) {
+	// No memory exists
+	// If no memory is allocated OR the previous block didn't match
+	if (vmem->allocation == NULL || (prev->req != desired_index && curr == NULL)) {
 		// Create alloc structure
 		struct VulkanAllocation *mem_salloc = malloc(sizeof(*mem_salloc));
 
@@ -147,71 +155,99 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		} else {
 			prev->next = mem_salloc;
 		}
+
+		vk_buff = curr->buffers =
+			vkmemory_createbufferstruct(buff, curr, aligned_size, 0, aligned_size);
+	} else if (curr == NULL) {
+		// If we traversed the list, found something and already put a buffer there, we need to go
+		// back to get the correct pointer
+		curr = prev;
 	}
 
 	// Bind buffer to memory
 	vkBindBufferMemory(vmem->device, vk_buff->buffer, curr->mem, vk_buff->start);
 
+	*struct_buff = vk_buff;
+
 	return true;
 }
 
-bool vkmemory_destroybuffer(struct VulkanMemory *vmem, VkBuffer buff) {
-	if (buff == NULL || vmem == NULL) {
+bool vkmemory_destroybuffer(struct VulkanMemory *vmem, struct VulkanBuffer *struct_buff) {
+	if (struct_buff == NULL || vmem == NULL) {
 		fprintf(stderr, "NULL values passed into destroy buffer function.\n");
 		return true;
 	}
 
 	// Find spot of GPU memory
-	struct VulkanAllocation *prev = NULL, *curr = vmem->allocation;
-	struct VulkanBuffer *bprev, *bcurr;
+	struct VulkanAllocation *curr = struct_buff->allocation;
+	struct VulkanBuffer *bprev = NULL, *bcurr = curr->buffers;
+	while (bcurr != NULL) {
+		if (bcurr->buffer == struct_buff->buffer) {
+			// Destroy buffer
+			vkDestroyBuffer(vmem->device, bcurr->buffer, NULL);
 
-	while (curr != NULL) {
-		bprev = NULL;
-		bcurr = curr->buffers;
-		while (bcurr != NULL) {
-			if (bcurr->buffer == buff) {
-				// Destroy buffer
-				vkDestroyBuffer(vmem->device, bcurr->buffer, NULL);
-
-				// Patch linked list
-				if (bprev == NULL) {
-					curr->buffers = bcurr->next;
-				} else {
-					bprev->next = bcurr->next;
-				}
-
-				// Free GPU memory if unused & patch linked list
-				if (bprev == NULL && bcurr->next == NULL) {
-					vkFreeMemory(vmem->device, curr->mem, NULL);
-					if (prev == NULL) {
-						vmem->allocation = curr->next;
-					} else {
-						prev->next = curr->next;
-					}
-					free(curr);
-				}
-
-				// Free allocated buffer struct
-				free(bcurr);
-
-				return true;
+			// Patch linked list
+			if (bprev == NULL) {
+				curr->buffers = bcurr->next;
+			} else {
+				bprev->next = bcurr->next;
 			}
 
-			bprev = bcurr;
-			bcurr = bcurr->next;
+			// Free GPU memory if unused & patch linked list
+			/* Impossible to patch memory allocation linked list without traversing or making it
+			more complex, so we just wait to free until vkmemory_destroy */
+
+			/* if (bprev == NULL && bcurr->next == NULL) {
+				vkFreeMemory(vmem->device, curr->mem, NULL);
+				if (vmem->allocation == curr) {
+					vmem->allocation = curr->next;
+				} else {
+					prev->next = curr->next;
+				}
+				free(curr);
+			} */
+
+			// Free allocated buffer struct
+			free(bcurr);
+
+			return true;
 		}
 
-		prev = curr;
-		curr = curr->next;
+		bprev = bcurr;
+		bcurr = bcurr->next;
 	}
 
 	fprintf(stderr, "Could not find buffer in allocated memory lists.\n");
 	return false;
 }
 
+bool vkmemory_mapbuffer(struct VulkanMemory *vmem, struct VulkanBuffer *struct_buff, void **map) {
+	if (struct_buff == NULL || vmem == NULL) {
+		fprintf(stderr, "NULL values passed into destroy buffer function.\n");
+		return true;
+	}
+
+	vkMapMemory(vmem->device, struct_buff->allocation->mem, struct_buff->start,
+				struct_buff->buffer_size, 0, map);
+
+	return true;
+}
+
+bool vkmemory_unmapbuffer(struct VulkanMemory *vmem, struct VulkanBuffer *struct_buff) {
+	if (struct_buff == NULL || vmem == NULL) {
+		fprintf(stderr, "NULL values passed into destroy buffer function.\n");
+		return false;
+	}
+
+	vkUnmapMemory(vmem->device, struct_buff->allocation->mem);
+
+	return true;
+}
+
 // Helper functions
-struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer buff, VkDeviceSize size,
-												 VkDeviceSize start, VkDeviceSize end) {
+struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer buff, struct VulkanAllocation *vk_alloc,
+												 VkDeviceSize size, VkDeviceSize start,
+												 VkDeviceSize end) {
 	struct VulkanBuffer *ret = malloc(sizeof(*ret));
 	if (ret == NULL) {
 		fprintf(stderr, "Failure allocating structure memory for buffer structure.\n");
@@ -219,9 +255,11 @@ struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer buff, VkDeviceSize siz
 	}
 
 	ret->buffer = buff;
+	ret->allocation = vk_alloc;
 	ret->buffer_size = size;
 	ret->start = start;
 	ret->end = end;
+	ret->next = NULL;
 	return ret;
 }
 

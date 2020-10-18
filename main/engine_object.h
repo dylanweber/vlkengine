@@ -39,19 +39,15 @@ struct RenderData {
 	enum PipelineType pltype;
 
 	// Vertex & index buffer
-	VkBuffer vi_buffer;
+	struct VulkanBuffer *vi_buffer;
 
 	// Vertices
 	struct Vertex *vertices;
 	size_t vertices_size;
-	VkDeviceSize vertex_alignment;
-	VkDeviceSize vertex_position;
 
 	// Indices
 	uint64_t *indices;
 	size_t indices_size;
-	VkDeviceSize indices_alignment;
-	VkDeviceSize indices_position;
 
 	// Uniform buffer as descriptor set
 	VkBuffer uni_buffer;
