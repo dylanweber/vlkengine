@@ -158,14 +158,10 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 
 		vk_buff = curr->buffers =
 			vkmemory_createbufferstruct(buff, curr, aligned_size, 0, aligned_size);
-	} else if (curr == NULL) {
-		// If we traversed the list, found something and already put a buffer there, we need to go
-		// back to get the correct pointer
-		curr = prev;
 	}
 
 	// Bind buffer to memory
-	vkBindBufferMemory(vmem->device, vk_buff->buffer, curr->mem, vk_buff->start);
+	vkBindBufferMemory(vmem->device, vk_buff->buffer, vk_buff->allocation->mem, vk_buff->start);
 
 	*struct_buff = vk_buff;
 
