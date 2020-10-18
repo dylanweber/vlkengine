@@ -2,6 +2,7 @@
 #include "config.h"
 #include "glfw/glfw3.h"
 
+#include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +36,11 @@ struct VulkanMemory {
 	struct VulkanAllocation *allocation;
 };
 
+struct MemoryOffsets {
+	VkDeviceSize start;
+	VkDeviceSize end;
+};
+
 // Structure functions
 bool vkmemory_init(struct VulkanMemory *, VkPhysicalDevice, VkDevice);
 bool vkmemory_destroy(struct VulkanMemory *);
@@ -50,5 +56,7 @@ bool vkmemory_unmapbuffer(struct VulkanMemory *, struct VulkanBuffer *);
 uint32_t vkmemory_findmemorytype(VkPhysicalDevice, uint32_t, VkMemoryPropertyFlags);
 struct VulkanBuffer *vkmemory_createbufferstruct(VkBuffer, struct VulkanAllocation *, VkDeviceSize,
 												 VkDeviceSize, VkDeviceSize);
+bool vkmemory_calculateoffsets(VkDeviceSize, VkDeviceSize, VkDeviceSize, VkDeviceSize,
+							   struct MemoryOffsets *);
 
 #endif	// ENGINE_VKMEMORY_H

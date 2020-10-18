@@ -9,24 +9,20 @@ bool vkmemory_init(struct VulkanMemory *vmem, VkPhysicalDevice physical_device, 
 
 bool vkmemory_destroy(struct VulkanMemory *vmem) {
 	// Free all buffers and memory
-	struct VulkanAllocation *prev = NULL, *curr = vmem->allocation;
-	struct VulkanBuffer *bprev, *bcurr;
+	struct VulkanAllocation *curr = vmem->allocation;
+	struct VulkanBuffer *bcurr;
 
 	while (curr != NULL) {
-		bprev = NULL;
 		bcurr = curr->buffers;
 		while (bcurr != NULL) {
 			vkDestroyBuffer(vmem->device, bcurr->buffer, NULL);
 
-			bprev = bcurr;
 			bcurr = bcurr->next;
 
 			free(bcurr);
 		}
 
 		vkFreeMemory(vmem->device, curr->mem, NULL);
-
-		prev = curr;
 		curr = curr->next;
 
 		free(curr);
@@ -71,49 +67,39 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 
 	// Find or allocate spot of GPU memory
 	struct VulkanAllocation *prev = NULL, *curr = vmem->allocation;
-	struct VulkanBuffer *vk_buff = NULL;
+	struct VulkanBuffer *new_buff = NULL;
 
 	while (curr != NULL) {
 		// If memory types are equal
 		if (curr->req == desired_index) {
 			// Traverse through buffers
-			struct VulkanBuffer *bprev = NULL, *bcurr = curr->buffers;
+			struct VulkanBuffer *bcurr = curr->buffers;
+			struct MemoryOffsets offsets = {0};
+			bool fits = false;
 
+			// Check beginning of linked list
+			if (bcurr != NULL) {
+				fits = vkmemory_calculateoffsets(0, bcurr->start, buff_size,
+												 mem_requirements.alignment, &offsets);
+				if (fits) {
+					new_buff = curr->buffers = vkmemory_createbufferstruct(
+						buff, curr, buff_size, offsets.start, offsets.end);
+					curr->buffers->next = bcurr;
+				}
+			}
+
+			// Check after every element
 			while (bcurr != NULL) {
-				// If we're at the start
-				if (bprev == NULL && bcurr != NULL) {
-					if (bcurr->start > aligned_size) {
-						// Insert new buffer
-						vk_buff = curr->buffers =
-							vkmemory_createbufferstruct(buff, curr, aligned_size, 0, aligned_size);
-						// Set next buffer to previous first buffer
-						curr->buffers->next = bcurr;
-						break;
-					}
-				}
-
-				// If we're in the middle
-				if (bprev != NULL && bcurr != NULL) {
-					if (bprev->end - bcurr->start > aligned_size) {
-						// Insert new buffer
-						vk_buff = bprev->next = vkmemory_createbufferstruct(
-							buff, curr, aligned_size, bprev->end, bprev->end + aligned_size);
-						// Set next buffer to previous next buffer
-						bprev->next->next = bcurr;
-						break;
-					}
-				}
-
-				// If we're at the end
-				if (bcurr->next == NULL) {
-					// Insert new buffer
-					vk_buff = bcurr->next = vkmemory_createbufferstruct(
-						buff, curr, aligned_size, bcurr->end, bcurr->end + aligned_size);
-					bcurr->next->next = NULL;
+				VkDeviceSize next_start =
+					(bcurr->next == NULL) ? curr->mem_size : bcurr->next->start;
+				fits = vkmemory_calculateoffsets(bcurr->end, next_start, buff_size,
+												 mem_requirements.alignment, &offsets);
+				if (fits) {
+					new_buff = bcurr->next = vkmemory_createbufferstruct(
+						buff, curr, buff_size, offsets.start, offsets.end);
 					break;
 				}
 
-				bprev = bcurr;
 				bcurr = bcurr->next;
 			}
 		}
@@ -123,9 +109,8 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		curr = curr->next;
 	}
 
-	// No memory exists
-	// If no memory is allocated OR the previous block didn't match
-	if (vmem->allocation == NULL || (prev->req != desired_index && curr == NULL)) {
+	// If not allocated
+	if (new_buff == NULL) {
 		// Create alloc structure
 		struct VulkanAllocation *mem_salloc = malloc(sizeof(*mem_salloc));
 
@@ -133,7 +118,9 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		mem_salloc->mem_size = VK_ALLOC_BLOCK_SIZE;
 		mem_salloc->req = vkmemory_findmemorytype(vmem->physical_device,
 												  mem_requirements.memoryTypeBits, properties);
-		mem_salloc->next = NULL;
+		mem_salloc->next = (curr == NULL) ? NULL : curr->next;
+
+		assert(curr == NULL || curr->next != NULL);
 
 		// Allocate memory
 		VkMemoryAllocateInfo alloc_info = {0};
@@ -156,14 +143,13 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 			prev->next = mem_salloc;
 		}
 
-		vk_buff = curr->buffers =
-			vkmemory_createbufferstruct(buff, curr, aligned_size, 0, aligned_size);
+		new_buff = curr->buffers = vkmemory_createbufferstruct(buff, curr, buff_size, 0, buff_size);
 	}
 
 	// Bind buffer to memory
-	vkBindBufferMemory(vmem->device, vk_buff->buffer, vk_buff->allocation->mem, vk_buff->start);
+	vkBindBufferMemory(vmem->device, new_buff->buffer, new_buff->allocation->mem, new_buff->start);
 
-	*struct_buff = vk_buff;
+	*struct_buff = new_buff;
 
 	return true;
 }
@@ -275,4 +261,21 @@ uint32_t vkmemory_findmemorytype(VkPhysicalDevice p_device, uint32_t type_filter
 
 	fprintf(stderr, "Failed to find suitable GPU memory type.\n");
 	return 0;
+}
+
+bool vkmemory_calculateoffsets(VkDeviceSize start, VkDeviceSize end, VkDeviceSize size,
+							   VkDeviceSize alignment, struct MemoryOffsets *offsets) {
+	VkDeviceSize start_offset = alignment - start % alignment;
+	VkDeviceSize area_start = start + start_offset;
+
+	VkDeviceSize area_end = area_start + size;
+
+	// If block cannot fit in free space
+	if (area_start < start || area_end > end) {
+		return false;
+	}
+
+	offsets->start = area_start;
+	offsets->end = area_end;
+	return true;
 }
