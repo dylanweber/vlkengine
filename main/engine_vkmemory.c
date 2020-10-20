@@ -61,9 +61,9 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		vkmemory_findmemorytype(vmem->physical_device, mem_requirements.memoryTypeBits, properties);
 
 	// Calculate aligned size of buffer
-	VkDeviceSize buff_pgs = buff_size / mem_requirements.alignment;
+	/* VkDeviceSize buff_pgs = buff_size / mem_requirements.alignment;
 	buff_pgs++;
-	VkDeviceSize aligned_size = buff_pgs * mem_requirements.alignment;
+	VkDeviceSize aligned_size = buff_pgs * mem_requirements.alignment; */
 
 	// Find or allocate spot of GPU memory
 	struct VulkanAllocation *prev = NULL, *curr = vmem->allocation;

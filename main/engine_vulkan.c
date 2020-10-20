@@ -93,7 +93,7 @@ bool vulkan_init(struct Application *app) {
 		return false;
 	}
 	// Create command pool
-	ret = vulkan_createcommandpool(app);
+	ret = vulkan_createcommandpools(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create command pool.\n");
 		return false;
@@ -296,6 +296,14 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 			indices.graphics_count += 1;
 		}
 
+		// Check for transfer queue
+		if (queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT &&
+			!(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+			indices.transfer_count != TRANSFER_INDICES_SIZE) {
+			indices.transfer_indices[indices.transfer_count] = i;
+			indices.transfer_count += 1;
+		}
+
 		// Check for present queue
 		vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, app->vulkan_data->surface,
 											 &present_support);
@@ -306,7 +314,7 @@ struct QueueFamilies vulkan_getqueuefamilies(struct Application *app,
 		}
 
 		// If struct is suitable, exit
-		if (indices.graphics_count > 0 && indices.present_count > 0) {
+		if (indices.graphics_count > 0 && indices.present_count > 0 && indices.transfer_count > 0) {
 			break;
 		}
 	}
@@ -445,7 +453,8 @@ void vulkan_close(struct Application *app) {
 	vkmemory_destroy(&app->vulkan_data->vmemory);
 
 	// Destroy command pool
-	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->command_pool, NULL);
+	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->gfx_command_pool, NULL);
+	vkDestroyCommandPool(app->vulkan_data->device, app->vulkan_data->tfr_command_pool, NULL);
 
 	// Destroy debug messenger
 	if (enable_validation_layers)
@@ -469,8 +478,12 @@ bool vulkan_cleanupswapchain(struct Application *app) {
 	free(app->vulkan_data->swapchain_framebuffers);
 
 	// Free command buffers
-	vkFreeCommandBuffers(app->vulkan_data->device, app->vulkan_data->command_pool,
-						 app->vulkan_data->command_buffers_size, app->vulkan_data->command_buffers);
+	vkFreeCommandBuffers(app->vulkan_data->device, app->vulkan_data->gfx_command_pool,
+						 app->vulkan_data->gfx_command_buffers_size,
+						 app->vulkan_data->gfx_command_buffers);
+	vkFreeCommandBuffers(app->vulkan_data->device, app->vulkan_data->tfr_command_pool,
+						 app->vulkan_data->tfr_command_buffers_size,
+						 app->vulkan_data->tfr_command_buffers);
 
 	// Destroy graphics pipeline
 	vkDestroyPipeline(app->vulkan_data->device, app->vulkan_data->pipeline2d, NULL);
@@ -633,14 +646,15 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	struct QueueFamilies qf_indices =
 		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
 	uint32_t queue_create_infos_size = 0;
-	VkDeviceQueueCreateInfo queue_create_infos[GFX_INDICES_SIZE + PRESENT_INDICES_SIZE] = {0};
+	VkDeviceQueueCreateInfo
+		queue_create_infos[GFX_INDICES_SIZE + PRESENT_INDICES_SIZE + TRANSFER_INDICES_SIZE] = {0};
 
 	float queue_priority = 1.0f;
 
-	// Go through every graphics index then present index and add to queue_create_infos if not found
+	// Go through every graphics/present/transfer index and add to queue_create_infos if not found
 	int i, j;
 	for (i = 0; i < qf_indices.graphics_count; i++) {
-		for (j = 0; j <= queue_create_infos_size; i++) {
+		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -656,7 +670,7 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 		}
 	}
 	for (i = 0; i < qf_indices.present_count; i++) {
-		for (j = 0; j <= queue_create_infos_size; i++) {
+		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -668,6 +682,23 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex == qf_indices.present_indices[i])
+				break;
+		}
+	}
+	for (i = 0; i < qf_indices.transfer_count; i++) {
+		for (j = 0; j <= queue_create_infos_size; j++) {
+			// If at the end of the queue_create_infos array, add new element
+			if (j == queue_create_infos_size) {
+				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				queue_create_infos[j].queueFamilyIndex = qf_indices.transfer_indices[i];
+				queue_create_infos[j].queueCount = 1;
+				queue_create_infos[j].pQueuePriorities = &queue_priority;
+				queue_create_infos_size += 1;
+				break;
+			}
+
+			// If match is found, go to next index
+			if (queue_create_infos[j].queueFamilyIndex == qf_indices.transfer_indices[i])
 				break;
 		}
 	}
@@ -706,6 +737,9 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	// Get present queue
 	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.present_indices[0], 0,
 					 &app->vulkan_data->present_queue);
+	// Get transfer queue
+	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.transfer_indices[0], 0,
+					 &app->vulkan_data->transfer_queue);
 
 	return true;
 }
@@ -1178,18 +1212,30 @@ bool vulkan_createframebuffers(struct Application *app) {
 	return true;
 }
 
-bool vulkan_createcommandpool(struct Application *app) {
+bool vulkan_createcommandpools(struct Application *app) {
 	struct QueueFamilies qf_indices =
 		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
-	VkCommandPoolCreateInfo pool_info = {0};
-	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
-	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	VkCommandPoolCreateInfo gfx_pool_info = {0};
+	gfx_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	gfx_pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
+	gfx_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	VkResult ret = vkCreateCommandPool(app->vulkan_data->device, &pool_info, NULL,
-									   &app->vulkan_data->command_pool);
+	VkResult ret = vkCreateCommandPool(app->vulkan_data->device, &gfx_pool_info, NULL,
+									   &app->vulkan_data->gfx_command_pool);
 	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create command pool.\n");
+		fprintf(stderr, "Failed to create graphics command pool.\n");
+		return false;
+	}
+
+	VkCommandPoolCreateInfo tfr_pool_info = {0};
+	tfr_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	tfr_pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
+	tfr_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	ret = vkCreateCommandPool(app->vulkan_data->device, &tfr_pool_info, NULL,
+							  &app->vulkan_data->tfr_command_pool);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to create transfer command pool.\n");
 		return false;
 	}
 
@@ -1197,33 +1243,44 @@ bool vulkan_createcommandpool(struct Application *app) {
 }
 
 bool vulkan_createcommandbuffers(struct Application *app) {
-	app->vulkan_data->command_buffers_size = app->vulkan_data->swapchain_framebuffers_size;
-	app->vulkan_data->command_buffers =
-		malloc(sizeof(*app->vulkan_data->command_buffers) * app->vulkan_data->command_buffers_size);
-	if (app->vulkan_data->command_buffers == NULL) {
+	// Create one graphics command buffer per swapchain framebuffer
+	app->vulkan_data->gfx_command_buffers_size = app->vulkan_data->swapchain_framebuffers_size;
+	app->vulkan_data->gfx_command_buffers = malloc(sizeof(*app->vulkan_data->gfx_command_buffers) *
+												   app->vulkan_data->gfx_command_buffers_size);
+	if (app->vulkan_data->gfx_command_buffers == NULL) {
 		fprintf(stderr, "Failure to allocate command buffers.\n");
 		return false;
 	}
 
-	VkCommandBufferAllocateInfo alloc_info = {0};
-	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	alloc_info.commandPool = app->vulkan_data->command_pool;
-	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	alloc_info.commandBufferCount = app->vulkan_data->command_buffers_size;
+	// Allocate graphics command buffers
+	VkCommandBufferAllocateInfo gfx_alloc_info = {0};
+	gfx_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	gfx_alloc_info.commandPool = app->vulkan_data->gfx_command_pool;
+	gfx_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	gfx_alloc_info.commandBufferCount = app->vulkan_data->gfx_command_buffers_size;
 
-	VkResult ret = vkAllocateCommandBuffers(app->vulkan_data->device, &alloc_info,
-											app->vulkan_data->command_buffers);
+	VkResult ret = vkAllocateCommandBuffers(app->vulkan_data->device, &gfx_alloc_info,
+											app->vulkan_data->gfx_command_buffers);
 	if (ret != VK_SUCCESS) {
-		fprintf(stderr, "Failure to allocate command buffers from Vulkan.\n");
+		fprintf(stderr, "Failure to allocate graphics command buffers.\n");
 		return false;
 	}
 
-	// Record commands on command buffers
-	/*uint32_t i;
-	for (i = 0; i < app->vulkan_data->command_buffers_size; i++) {
-		vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[i],
-								  app->vulkan_data->swapchain_framebuffers[i], app->render_group);
-	}*/
+	// Allocate transfer command buffers
+	app->vulkan_data->tfr_command_buffers_size = 1;
+
+	VkCommandBufferAllocateInfo tfr_alloc_info = {0};
+	tfr_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	tfr_alloc_info.commandPool = app->vulkan_data->tfr_command_pool;
+	tfr_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	tfr_alloc_info.commandBufferCount = app->vulkan_data->tfr_command_buffers_size;
+
+	ret = vkAllocateCommandBuffers(app->vulkan_data->device, &tfr_alloc_info,
+								   app->vulkan_data->tfr_command_buffers);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to allocate transfer command buffers.\n");
+		return false;
+	}
 
 	return true;
 }
@@ -1508,7 +1565,7 @@ bool vulkan_drawframe(struct Application *app) {
 		app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame];
 
 	// Rerecord command buffers
-	vulkan_recorddrawcommands(app, app->vulkan_data->command_buffers[image_index],
+	vulkan_recorddrawcommands(app, app->vulkan_data->gfx_command_buffers[image_index],
 							  app->vulkan_data->swapchain_framebuffers[image_index],
 							  app->render_group);
 
@@ -1521,7 +1578,7 @@ bool vulkan_drawframe(struct Application *app) {
 		&app->vulkan_data->image_available_sem[app->vulkan_data->current_frame];
 	submit_info.pWaitDstStageMask = wait_stages;
 	submit_info.commandBufferCount = 1;
-	submit_info.pCommandBuffers = &app->vulkan_data->command_buffers[image_index];
+	submit_info.pCommandBuffers = &app->vulkan_data->gfx_command_buffers[image_index];
 	submit_info.signalSemaphoreCount = 1;
 	submit_info.pSignalSemaphores =
 		&app->vulkan_data->render_finished_sem[app->vulkan_data->current_frame];

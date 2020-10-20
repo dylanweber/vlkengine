@@ -18,6 +18,8 @@
 
 #define GFX_INDICES_SIZE 1
 #define PRESENT_INDICES_SIZE 1
+#define TRANSFER_INDICES_SIZE 1
+
 #define MAX_FRAMES_IN_FLIGHT 2
 #define VULKAN_HASHSET_SIZE 32
 
@@ -29,6 +31,8 @@ struct QueueFamilies {
 	uint32_t graphics_indices[GFX_INDICES_SIZE];
 	uint32_t present_count;
 	uint32_t present_indices[PRESENT_INDICES_SIZE];
+	uint32_t transfer_count;
+	uint32_t transfer_indices[TRANSFER_INDICES_SIZE];
 };
 
 struct SwapChainSupportDetails {
@@ -56,7 +60,7 @@ struct VulkanData {
 	VkDevice device;
 
 	// Graphics and present queue
-	VkQueue graphics_queue, present_queue;
+	VkQueue graphics_queue, present_queue, transfer_queue;
 
 	// Surface, swapchain, and associated variables
 	VkSurfaceKHR surface;
@@ -79,9 +83,9 @@ struct VulkanData {
 	// Framebuffers & command buffers
 	uint32_t swapchain_framebuffers_size;
 	VkFramebuffer *swapchain_framebuffers;
-	VkCommandPool command_pool;
-	uint32_t command_buffers_size;
-	VkCommandBuffer *command_buffers;
+	VkCommandPool gfx_command_pool, tfr_command_pool;
+	uint32_t gfx_command_buffers_size, tfr_command_buffers_size;
+	VkCommandBuffer *gfx_command_buffers, *tfr_command_buffers;
 
 	// Memory allocation info
 	struct VulkanMemory vmemory;
@@ -128,7 +132,7 @@ bool vulkan_createrenderpass(struct Application *);
 bool vulkan_createshaders(struct Application *);
 bool vulkan_create2Dpipeline(struct Application *);
 bool vulkan_createframebuffers(struct Application *);
-bool vulkan_createcommandpool(struct Application *);
+bool vulkan_createcommandpools(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);
 bool vulkan_createsynchronization(struct Application *);
 bool vulkan_createvertexbuffers(struct Application *);
