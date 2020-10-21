@@ -101,7 +101,7 @@ struct VulkanData {
 	bool framebuffer_resized;
 
 	// Structures required for creation
-	// struct QueueFamilies qf_indices;
+	struct QueueFamilies qf_indices;
 	// struct SwapChainSupportDetails sc_details;
 };
 

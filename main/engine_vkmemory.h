@@ -33,6 +33,8 @@ struct VulkanAllocation {
 struct VulkanMemory {
 	VkPhysicalDevice physical_device;
 	VkDevice device;
+	uint32_t gfx_index, tfr_index;
+	pthread_t thread;
 	struct VulkanAllocation *allocation;
 };
 
@@ -42,7 +44,7 @@ struct MemoryOffsets {
 };
 
 // Structure functions
-bool vkmemory_init(struct VulkanMemory *, VkPhysicalDevice, VkDevice);
+bool vkmemory_init(struct VulkanMemory *, VkPhysicalDevice, VkDevice, uint32_t, uint32_t);
 bool vkmemory_destroy(struct VulkanMemory *);
 
 // Buffer functions

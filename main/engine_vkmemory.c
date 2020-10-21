@@ -1,8 +1,11 @@
 #include "engine_vkmemory.h"
 
-bool vkmemory_init(struct VulkanMemory *vmem, VkPhysicalDevice physical_device, VkDevice device) {
+bool vkmemory_init(struct VulkanMemory *vmem, VkPhysicalDevice physical_device, VkDevice device,
+				   uint32_t gfx_index, uint32_t tfr_index) {
 	vmem->physical_device = physical_device;
 	vmem->device = device;
+	vmem->gfx_index = gfx_index;
+	vmem->tfr_index = tfr_index;
 	vmem->allocation = NULL;
 	return true;
 }
@@ -37,13 +40,26 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		printf("Creating GPU buffer...\n");
 	}
 
+	// Check size
+	if (buff_size > VK_ALLOC_BLOCK_SIZE) {
+		fprintf(stderr, "Trying to allocate a chunk of memory too big.\n");
+		return false;
+	}
+
 	// Create buffer before allocation
 	VkBufferCreateInfo buffer_info = {0};
+
+	uint32_t queue_indices[2] = {vmem->gfx_index, vmem->tfr_index};
 
 	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	buffer_info.size = buff_size;
 	buffer_info.usage = usage;
-	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	/* Set to concurrent
+	   (non-optimal for mobile GPUs)
+	   Would require ownership transfer if exclusive */
+	buffer_info.sharingMode = VK_SHARING_MODE_CONCURRENT;
+	buffer_info.queueFamilyIndexCount = 2;
+	buffer_info.pQueueFamilyIndices = queue_indices;
 	buffer_info.flags = 0;
 
 	VkBuffer buff;

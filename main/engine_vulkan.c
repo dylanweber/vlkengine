@@ -74,7 +74,8 @@ bool vulkan_init(struct Application *app) {
 
 	// Set up GPU memory allocation
 	ret = vkmemory_init(&app->vulkan_data->vmemory, app->vulkan_data->physical_device,
-						app->vulkan_data->device);
+						app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0],
+						app->vulkan_data->qf_indices.transfer_indices[0]);
 	if (ret == false) {
 		fprintf(stderr, "Failure to create GPU memory allocator.\n");
 		return false;
@@ -643,8 +644,7 @@ inline bool vulkan_devicesupportsextensions(VkPhysicalDevice physical_device) {
 
 bool vulkan_createlogicaldevice(struct Application *app) {
 	// Create set of VkDeviceQueueCreateInfos for every index in our QueueFamilies
-	struct QueueFamilies qf_indices =
-		vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
+	app->vulkan_data->qf_indices = vulkan_getqueuefamilies(app, app->vulkan_data->physical_device);
 	uint32_t queue_create_infos_size = 0;
 	VkDeviceQueueCreateInfo
 		queue_create_infos[GFX_INDICES_SIZE + PRESENT_INDICES_SIZE + TRANSFER_INDICES_SIZE] = {0};
@@ -653,44 +653,49 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 
 	// Go through every graphics/present/transfer index and add to queue_create_infos if not found
 	int i, j;
-	for (i = 0; i < qf_indices.graphics_count; i++) {
+	for (i = 0; i < app->vulkan_data->qf_indices.graphics_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_create_infos[j].queueFamilyIndex = qf_indices.graphics_indices[i];
+				queue_create_infos[j].queueFamilyIndex =
+					app->vulkan_data->qf_indices.graphics_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
 				break;
 			}
 			// If match is found, go to next index
-			if (queue_create_infos[j].queueFamilyIndex == qf_indices.graphics_indices[i])
+			if (queue_create_infos[j].queueFamilyIndex ==
+				app->vulkan_data->qf_indices.graphics_indices[i])
 				break;
 		}
 	}
-	for (i = 0; i < qf_indices.present_count; i++) {
+	for (i = 0; i < app->vulkan_data->qf_indices.present_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at end of queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_create_infos[j].queueFamilyIndex = qf_indices.present_indices[i];
+				queue_create_infos[j].queueFamilyIndex =
+					app->vulkan_data->qf_indices.present_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
 				break;
 			}
 			// If match is found, go to next index
-			if (queue_create_infos[j].queueFamilyIndex == qf_indices.present_indices[i])
+			if (queue_create_infos[j].queueFamilyIndex ==
+				app->vulkan_data->qf_indices.present_indices[i])
 				break;
 		}
 	}
-	for (i = 0; i < qf_indices.transfer_count; i++) {
+	for (i = 0; i < app->vulkan_data->qf_indices.transfer_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at the end of the queue_create_infos array, add new element
 			if (j == queue_create_infos_size) {
 				queue_create_infos[j].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queue_create_infos[j].queueFamilyIndex = qf_indices.transfer_indices[i];
+				queue_create_infos[j].queueFamilyIndex =
+					app->vulkan_data->qf_indices.transfer_indices[i];
 				queue_create_infos[j].queueCount = 1;
 				queue_create_infos[j].pQueuePriorities = &queue_priority;
 				queue_create_infos_size += 1;
@@ -698,7 +703,8 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 
 			// If match is found, go to next index
-			if (queue_create_infos[j].queueFamilyIndex == qf_indices.transfer_indices[i])
+			if (queue_create_infos[j].queueFamilyIndex ==
+				app->vulkan_data->qf_indices.transfer_indices[i])
 				break;
 		}
 	}
@@ -732,13 +738,13 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	}
 
 	// Get graphics queue
-	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.graphics_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0], 0,
 					 &app->vulkan_data->graphics_queue);
 	// Get present queue
-	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.present_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.present_indices[0], 0,
 					 &app->vulkan_data->present_queue);
 	// Get transfer queue
-	vkGetDeviceQueue(app->vulkan_data->device, qf_indices.transfer_indices[0], 0,
+	vkGetDeviceQueue(app->vulkan_data->device, app->vulkan_data->qf_indices.transfer_indices[0], 0,
 					 &app->vulkan_data->transfer_queue);
 
 	return true;
@@ -1248,7 +1254,7 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 	app->vulkan_data->gfx_command_buffers = malloc(sizeof(*app->vulkan_data->gfx_command_buffers) *
 												   app->vulkan_data->gfx_command_buffers_size);
 	if (app->vulkan_data->gfx_command_buffers == NULL) {
-		fprintf(stderr, "Failure to allocate command buffers.\n");
+		fprintf(stderr, "Failure to allocate command buffers array.\n");
 		return false;
 	}
 
@@ -1268,6 +1274,12 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 
 	// Allocate transfer command buffers
 	app->vulkan_data->tfr_command_buffers_size = 1;
+	app->vulkan_data->tfr_command_buffers = malloc(sizeof(*app->vulkan_data->tfr_command_buffers) *
+												   app->vulkan_data->tfr_command_buffers_size);
+	if (app->vulkan_data->tfr_command_buffers == NULL) {
+		fprintf(stderr, "Failure to allocate transfer command buffers array.\n");
+		return false;
+	}
 
 	VkCommandBufferAllocateInfo tfr_alloc_info = {0};
 	tfr_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
