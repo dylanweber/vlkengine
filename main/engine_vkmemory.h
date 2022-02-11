@@ -18,6 +18,7 @@ struct VulkanBuffer {
 	size_t buffer_size;
 	VkDeviceSize start;
 	VkDeviceSize end;
+	uint16_t retain_count;
 	struct VulkanAllocation *allocation;
 	struct VulkanBuffer *next;
 };
@@ -34,7 +35,7 @@ struct VulkanMemory {
 	VkPhysicalDevice physical_device;
 	VkDevice device;
 	uint32_t gfx_index, tfr_index;
-	pthread_t thread;
+	pthread_mutex_t allocation_lock;
 	struct VulkanAllocation *allocation;
 };
 

@@ -4,6 +4,7 @@
 #include "engine_vkmemory.h"
 #include "glfw/glfw3.h"
 #include "hashdata.h"
+#include "object_struct.h"
 
 #include <assert.h>
 #include <math.h>
@@ -23,7 +24,6 @@
 #define MAX_FRAMES_IN_FLIGHT 2
 #define VULKAN_HASHSET_SIZE 32
 
-enum PipelineType { NO_PIPELINE, PIPELINE_2D, PIPELINE_3D, NUM_PIPELINES };
 enum ShaderCache { VERTEX_SHADER_2D, FRAGMENT_SHADER_2D, NUM_SHADER_CACHE };
 
 struct QueueFamilies {
@@ -135,11 +135,20 @@ bool vulkan_createframebuffers(struct Application *);
 bool vulkan_createcommandpools(struct Application *);
 bool vulkan_createcommandbuffers(struct Application *);
 bool vulkan_createsynchronization(struct Application *);
-bool vulkan_createvertexbuffers(struct Application *);
+
+// Vulkan transfer queue functions
+bool vulkan_copybuffer(struct Application *, struct VulkanMemory *, struct VulkanBuffer *,
+					   struct VulkanBuffer *, VkDeviceSize, VkDeviceSize);
 uint32_t vulkan_findmemorytype(struct Application *, uint32_t, VkMemoryPropertyFlags);
+
+// Command buffer recording
+bool vulkan_recordobjgrp(struct Application *, VkCommandBuffer, VkFramebuffer,
+						 struct ObjectGroup *);
+void vulkan_recordallocationlist(struct Application *, VkCommandBuffer,
+								 struct EngineObjectAllocation *);
+
+// Frame draw
 bool vulkan_drawframe(struct Application *);
-bool vulkan_recorddrawcommands(struct Application *, VkCommandBuffer, VkFramebuffer,
-							   struct RenderGroup *);
 
 // Shader functions
 struct ShaderFile vulkan_readshaderfile(const char *);

@@ -1,268 +1,284 @@
 #include "engine_object.h"
 
-/*          Object link functions         */
+/*			Engine object group functions		*/
+bool objgrp_init(struct ObjectGroup *obj_grp, struct VulkanMemory *vmem) {
+	int i;
+	for (i = 0; i < NUM_PIPELINES; i++) {
+		obj_grp->pipelines[i].pltype = i;
+		obj_grp->pipelines[i].allocations = NULL;
+		obj_grp->queue[i] = NULL;
+		obj_grp->queue_size[i] = 0;
+	}
 
-/**
- * @brief Initializes object link
- *
- * @param objects Object chain to initialize
- * @return Success boolean
- */
-bool objectlink_init(struct RenderObjectChain *objects) {
-	objects->link = NULL;
-	objects->size = 0;
+	obj_grp->object_table = hashtable_create(OBJECT_HASHTABLE_SIZE);
+	obj_grp->memory_pool = vmem;
 	return true;
 }
 
-/**
- * @brief Adds an object to the application's object link
- *
- * @param objects Object chain to add object to
- * @param render_object Object to add to application
- * @return Success boolean
- */
-bool objectlink_add(struct RenderObjectChain *objects, struct RenderObject *render_object) {
-	struct RenderObjectLink *curr = objects->link;
-
-	struct RenderObjectLink *new_link = malloc(sizeof(*new_link));
-	if (new_link == NULL) {
-		fprintf(stderr, "Failure to allocate memory.\n");
+bool objgrp_queue(struct ObjectGroup *obj_grp, struct EngineObjectCreateInfo *eo_create_info) {
+	struct ObjectGroupQueue *link = malloc(sizeof(*link));
+	if (link == NULL) {
+		fprintf(stderr, "Failure to allocate link for object group.\n");
 		return false;
 	}
 
-	new_link->render_object = render_object;
-	new_link->next = NULL;
+	link->info = eo_create_info;
+	link->next = NULL;
 
+	struct ObjectGroupQueue *curr = obj_grp->queue[eo_create_info->pltype];
+
+	// Get to end of queue
 	while (curr != NULL && curr->next != NULL) {
 		curr = curr->next;
 	}
 
+	// Assign to end of queue
 	if (curr == NULL) {
-		objects->link = new_link;
+		obj_grp->queue[eo_create_info->pltype] = link;
 	} else {
-		curr->next = new_link;
+		curr->next = link;
 	}
 
-	objects->size++;
-	return true;
-}
-
-/**
- * @brief Retrieves the size of the object chain
- *
- * @param objects Object chain to determine size of
- * @return size_t Size of object chain
- */
-size_t objectlist_getsize(struct RenderObjectChain *objects) {
-	if (objects == NULL) {
-		fprintf(stderr, "Invalid use of objectlist_getsize(struct RenderObjectChain *)\n");
-		return 0;
-	}
-	if (objects->link == NULL && objects->size != 0) {
-		fprintf(stderr, "RenderObjectChain is corrupted.\n");
-		return 0;
-	}
-	return objects->size;
-}
-
-/**
- * @brief Gets the head of the linked list
- *
- * @param objects Render object chain to get head of
- * @return struct RenderObjectLink* Head of linked list
- */
-struct RenderObjectLink *objectlist_gethead(struct RenderObjectChain *objects) {
-	if (objects == NULL) {
-		fprintf(stderr, "Invalid use of objectlist_gethead(struct RenderObjectChain *)\n");
-		return NULL;
-	}
-	if (objects->link == NULL && objects->size != 0) {
-		fprintf(stderr, "RenderObjectChain is corrupted.\n");
-		return NULL;
-	}
-	return objects->link;
-}
-
-/**
- * @brief Destroys every object in the link and the chain itself
- *
- * @param objects Render chain to destroy
- * @param app Application the chain belongs to
- * @return Success boolean
- */
-bool objectlink_destroy(struct RenderObjectChain *objects, struct Application *app) {
-	struct RenderObjectLink *curr = objects->link, *next;
-
-	while (curr != NULL) {
-		object_destroy(curr->render_object, app);
-		if (curr->render_object->is_static == false)
-			free(curr->render_object);
-		next = curr->next;
-		free(curr);
-		curr = next;
-	}
-
-	objects->size = 0;
-	return true;
-}
-
-/*          Pipeline link functions         */
-
-bool pipelinelink_init(struct RenderPipelineChain *pipeline_chain) {
-	pipeline_chain->pl_sizes = malloc(sizeof(*pipeline_chain->pl_sizes) * NUM_PIPELINES);
-	if (pipeline_chain->pl_sizes == NULL) {
-		fprintf(stderr, "Failed to allocate memory.\n");
-		return false;
-	}
-
-	pipeline_chain->links = malloc(sizeof(*pipeline_chain->links) * NUM_PIPELINES);
-	if (pipeline_chain->links == NULL) {
-		fprintf(stderr, "Failed to allocate memory.\n");
-		return false;
-	}
-
-	pipeline_chain->size = NUM_PIPELINES;
-
-	uint32_t i;
-	for (i = 0; i < NUM_PIPELINES; i++) {
-		pipeline_chain->links[i] = NULL;
-		pipeline_chain->pl_sizes[i] = 0;
-	}
+	// Increment queue size
+	obj_grp->queue_size[eo_create_info->pltype]++;
 
 	return true;
 }
 
-bool pipelinelink_add(struct RenderPipelineChain *pipeline_chain,
-					  struct RenderObject *render_object) {
-	struct RenderPipelineLink *curr = pipeline_chain->links[render_object->render_data.pltype];
+bool objgrp_processqueue(struct ObjectGroup *obj_grp, struct Application *app) {
+	// Go through every queue for each pipeline
+	enum PipelineType pltype;
 
-	struct RenderPipelineLink *new_link = malloc(sizeof(*new_link));
-	if (new_link == NULL) {
-		fprintf(stderr, "Failed to allocate memory.\n");
-		return false;
-	}
-
-	new_link->render_object = render_object;
-	new_link->next = NULL;
-
-	while (curr != NULL && curr->next != NULL) {
-		curr = curr->next;
-	}
-
-	if (curr == NULL) {
-		pipeline_chain->links[render_object->render_data.pltype] = new_link;
-	} else {
-		curr->next = new_link;
-	}
-
-	pipeline_chain->pl_sizes[render_object->render_data.pltype]++;
-	return true;
-}
-
-struct RenderPipelineLink *pipelinelink_gethead(struct RenderPipelineChain *pipeline_chain,
-												enum PipelineType pltype) {
-	return pipeline_chain->links[pltype];
-}
-
-size_t pipelinelink_getsize(struct RenderPipelineChain *pipeline_chain, enum PipelineType pltype) {
-	return pipeline_chain->pl_sizes[pltype];
-}
-
-/**
- * @brief Deletes all links in the pipeline chains for all pipelines
- *
- * @param pipeline_chain Pipeline chain to clean
- * @return Success boolean
- */
-bool pipelinelink_destroy(struct RenderPipelineChain *pipeline_chain) {
-	struct RenderPipelineLink *curr = NULL, *prev;
-	uint32_t i;
-	for (i = 0; i < NUM_PIPELINES; i++) {
-		curr = pipeline_chain->links[i];
-		if (curr == NULL) {
+	for (pltype = NO_PIPELINE; pltype < NUM_PIPELINES; pltype++) {
+		// Move on if nothing to process
+		if (obj_grp->queue_size[pltype] == 0) {
 			continue;
 		}
 
+		// Allocate engine object block
+		struct EngineObjectAllocation *allocation = malloc(sizeof(*allocation));
+		if (allocation == NULL) {
+			fprintf(stderr, "Failure to allocate engine object block.\n");
+			return false;
+		}
+
+		// Set object block values
+		allocation->objects_size = obj_grp->queue_size[pltype];
+		allocation->next = NULL;
+
+		// Allocate objects
+		allocation->objects = malloc(sizeof(*allocation->objects) * allocation->objects_size);
+		if (allocation->objects == NULL) {
+			fprintf(stderr, "Failure to allocate objects.\n");
+			return false;
+		}
+
+		// Clear all object data
+		memset(allocation->objects, 0, sizeof(*allocation->objects) * allocation->objects_size);
+
+		// Go through every object on queue and create them
+		// Also count bytes for buffer allocation
+		struct ObjectGroupQueue *prev, *curr = obj_grp->queue[pltype];
+		VkDeviceSize buffer_size = 0;
+		union HashTableValue val;
+		int i = 0;
+
 		while (curr != NULL) {
+			// Create object & put on allocated array
+			object_init(&allocation->objects[i], app, curr->info);
+
+			buffer_size += allocation->objects[i].render_data.vertices_size *
+						   sizeof(*allocation->objects[i].render_data.vertices);
+			buffer_size += allocation->objects[i].render_data.indices_size *
+						   sizeof(*allocation->objects[i].render_data.indices);
+
+			// Store object in hashtable
+			val.ptr = &allocation->objects[i];
+			hashtable_store(obj_grp->object_table, curr->info->name, val, HASHTABLE_PTR);
+
+			// Move to next item in queue
 			prev = curr;
 			curr = curr->next;
+			i++;
+
+			// Free queue item
 			free(prev);
+			prev = NULL;
 		}
+
+		// Create buffer for objects in allocation
+		struct VulkanBuffer *obj_buffer;
+		bool ret = vkmemory_createbuffer(obj_grp->memory_pool, buffer_size,
+										 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+											 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &obj_buffer);
+		if (ret == false) {
+			fprintf(stderr, "Failure creating Vulkan buffer.\n");
+			return false;
+		}
+
+		// Assign buffer data to each object, copy data
+		struct VulkanBuffer *temp_buff;
+		VkDeviceSize v_offset = 0;
+		int j;
+
+		for (j = 0; j < allocation->objects_size; j++) {
+			printf("Setting object buffer to %p\n", obj_buffer->buffer);
+			allocation->objects[j].render_data.vi_buffer = obj_buffer;
+			allocation->objects[j].render_data.vertex_offset = v_offset;
+
+			ret = vkmemory_createbuffer(obj_grp->memory_pool,
+										sizeof(*allocation->objects[j].render_data.vertices) *
+											allocation->objects[j].render_data.vertices_size,
+										VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+										VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+											VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+										&temp_buff);
+			if (ret == false) {
+				fprintf(stderr, "Failure transfering vertex data to GPU.\n");
+				return false;
+			}
+
+			void *data;
+			vkmemory_mapbuffer(obj_grp->memory_pool, temp_buff, &data);
+			memcpy(data, allocation->objects[j].render_data.vertices,
+				   sizeof(*allocation->objects[j].render_data.vertices) *
+					   allocation->objects[j].render_data.vertices_size);
+			vkmemory_unmapbuffer(obj_grp->memory_pool, temp_buff);
+
+			vulkan_copybuffer(app, obj_grp->memory_pool, temp_buff, obj_buffer,
+							  sizeof(*allocation->objects[j].render_data.vertices) *
+								  allocation->objects[j].render_data.vertices_size,
+							  v_offset);
+
+			vkmemory_destroybuffer(obj_grp->memory_pool, temp_buff);
+
+			v_offset += sizeof(*allocation->objects[j].render_data.vertices) *
+						allocation->objects[j].render_data.vertices_size;
+		}
+
+		assert(i == obj_grp->queue_size[pltype]);
+
+		// Put allocation on pipeline list
+		struct EngineObjectAllocation *plcurr = obj_grp->pipelines[pltype].allocations;
+
+		while (plcurr != NULL && plcurr->next != NULL) {
+			plcurr = plcurr->next;
+		}
+
+		if (plcurr == NULL) {
+			obj_grp->pipelines[pltype].allocations = allocation;
+		} else {
+			plcurr->next = allocation;
+		}
+
+		// Empty current queue
+		obj_grp->queue[pltype] = NULL;
+		obj_grp->queue_size[pltype] = 0;
 	}
 
-	free(pipeline_chain->links);
-	free(pipeline_chain->pl_sizes);
 	return true;
 }
 
-/*          Render group functions         */
+bool objgrp_destroy(struct ObjectGroup *objgrp) {
+	enum PipelineType pltype;
 
-bool rendergroup_init(struct RenderGroup *render_group) {
-	render_group->objects = malloc(sizeof(*render_group->objects));
-	render_group->pipelines = malloc(sizeof(*render_group->pipelines));
+	for (pltype = NO_PIPELINE; pltype < NUM_PIPELINES; pltype++) {
+		struct EngineObjectAllocation *prev, *curr = objgrp->pipelines[pltype].allocations;
+		while (curr != NULL) {
+			prev = curr;
+			curr = curr->next;
 
-	return objectlink_init(render_group->objects) && pipelinelink_init(render_group->pipelines);
-}
+			int i;
+			for (i = 0; i < prev->objects_size; i++) {
+				object_destroy(&prev->objects[i]);
+			}
 
-bool rendergroup_add(struct RenderGroup *render_group, struct RenderObject *render_object) {
-	return objectlink_add(render_group->objects, render_object) &&
-		   pipelinelink_add(render_group->pipelines, render_object);
-}
+			free(prev->objects);
+			prev->objects = NULL;
+			free(prev);
+			prev = NULL;
+		}
+	}
 
-bool rendergroup_destroy(struct RenderGroup *render_group, struct Application *app) {
-	bool ret = objectlink_destroy(render_group->objects, app) &&
-			   pipelinelink_destroy(render_group->pipelines);
-	if (ret == false)
-		return ret;
-
-	free(render_group->objects);
-	free(render_group->pipelines);
-	return ret;
+	hashtable_destroy(objgrp->object_table);
+	return true;
 }
 
 /*          Render object functions         */
 
-bool object_init(struct Application *app, struct RenderObjectCreateInfo *ro_create_info,
-				 struct RenderObject *render_object) {
-	render_object->render_data.pltype = ro_create_info->pltype;
-	render_object->render_data.vertices_size = ro_create_info->vertices_size;
-	render_object->render_data.vertices = malloc(sizeof(*render_object->render_data.vertices) *
-												 render_object->render_data.vertices_size);
-	if (render_object->render_data.vertices == NULL) {
-		fprintf(stderr, "Failure to allocate memory.\n");
-		return false;
+bool object_init(struct EngineObject *engine_object, struct Application *app,
+				 struct EngineObjectCreateInfo *eo_create_info) {
+	// Clear data
+	memset(engine_object, 0, sizeof(*engine_object));
+
+	// Set render data
+	engine_object->render_data.pltype = eo_create_info->pltype;
+
+	if (eo_create_info->vertices_size > 0) {
+		engine_object->render_data.vertices_size = eo_create_info->vertices_size;
+		engine_object->render_data.vertices = malloc(sizeof(*engine_object->render_data.vertices) *
+													 engine_object->render_data.vertices_size);
+		if (engine_object->render_data.vertices == NULL) {
+			fprintf(stderr, "Failure to allocate memory. Line: #%d.\n", __LINE__);
+			return false;
+		}
+
+		memcpy(engine_object->render_data.vertices, eo_create_info->vertices,
+			   sizeof(*engine_object->render_data.vertices) * eo_create_info->vertices_size);
+	} else {
+		engine_object->render_data.vertices_size = 0;
+		engine_object->render_data.vertices = NULL;
 	}
 
-	memcpy(render_object->render_data.vertices, ro_create_info->vertices,
-		   sizeof(*render_object->render_data.vertices) * ro_create_info->vertices_size);
+	if (eo_create_info->indices_size > 0) {
+		engine_object->render_data.indices_size = eo_create_info->indices_size;
+		engine_object->render_data.indices = malloc(sizeof(*engine_object->render_data.indices) *
+													engine_object->render_data.indices_size);
+		if (engine_object->render_data.indices == NULL) {
+			fprintf(stderr, "Failure to allocate memory. Line: #%d.\n", __LINE__);
+			return false;
+		}
 
-	render_object->is_static = ro_create_info->is_static;
-	render_object->retain_count = 1;
+		memcpy(engine_object->render_data.indices, eo_create_info->indices,
+			   sizeof(*engine_object->render_data.indices) * eo_create_info->indices_size);
+	} else {
+		engine_object->render_data.indices_size = 0;
+		engine_object->render_data.indices = NULL;
+	}
+
+	// Set default struct data
+	engine_object->owner = app;
+	memset(engine_object->pos, 0, sizeof(engine_object->pos));
+	memset(engine_object->rot, 0, sizeof(engine_object->rot));
+	engine_object->is_static = eo_create_info->is_static;
+	engine_object->retain_count = 1;
 	return true;
 }
 
-bool object_retain(struct RenderObject *render_object) {
-	if (render_object->is_static == true)
-		return true;
-	render_object->retain_count++;
+bool object_retain(struct EngineObject *engine_object) {
+	engine_object->retain_count++;
 	return true;
 }
 
-bool object_release(struct RenderObject *render_object) {
-	free(render_object->render_data.vertices);
-	if (render_object->is_static == true)
-		return true;
-	render_object->retain_count--;
-	if (render_object->retain_count == 0)
-		free(render_object);
+bool object_release(struct EngineObject *engine_object) {
+	engine_object->retain_count--;
+	if (engine_object->retain_count == 0)
+		object_destroy(engine_object);
 	return true;
 }
 
-bool object_destroy(struct RenderObject *render_object, struct Application *app) {
-	object_destroybuffers(render_object, app);
+bool object_destroy(struct EngineObject *engine_object) {
+	free(engine_object->render_data.vertices);
+	engine_object->render_data.vertices = NULL;
+	free(engine_object->render_data.indices);
+	engine_object->render_data.indices = NULL;
+	object_destroybuffers(engine_object);
+
 	return true;
 }
 
-void object_destroybuffers(struct RenderObject *render_object, struct Application *app) {
-	vkmemory_destroybuffer(&app->vulkan_data->vmemory, render_object->render_data.vi_buffer);
+void object_destroybuffers(struct EngineObject *engine_object) {
+	vkmemory_destroybuffer(&engine_object->owner->vulkan_data->vmemory,
+						   engine_object->render_data.vi_buffer);
 }

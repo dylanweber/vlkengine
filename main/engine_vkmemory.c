@@ -7,37 +7,53 @@ bool vkmemory_init(struct VulkanMemory *vmem, VkPhysicalDevice physical_device, 
 	vmem->gfx_index = gfx_index;
 	vmem->tfr_index = tfr_index;
 	vmem->allocation = NULL;
+
+	pthread_mutex_init(&vmem->allocation_lock, NULL);
+
 	return true;
 }
 
 bool vkmemory_destroy(struct VulkanMemory *vmem) {
+	// Get lock
+	pthread_mutex_lock(&vmem->allocation_lock);
+
 	// Free all buffers and memory
-	struct VulkanAllocation *curr = vmem->allocation;
-	struct VulkanBuffer *bcurr;
+	struct VulkanAllocation *curr = vmem->allocation, *next;
+	struct VulkanBuffer *bcurr, *bnext;
 
 	while (curr != NULL) {
 		bcurr = curr->buffers;
 		while (bcurr != NULL) {
 			vkDestroyBuffer(vmem->device, bcurr->buffer, NULL);
 
-			bcurr = bcurr->next;
+			bnext = bcurr->next;
 
 			free(bcurr);
+			bcurr = bnext;
 		}
 
 		vkFreeMemory(vmem->device, curr->mem, NULL);
-		curr = curr->next;
+		next = curr->next;
 
 		free(curr);
+		curr = next;
 	}
+
+	// Destroy lock
+	pthread_mutex_unlock(&vmem->allocation_lock);
+	pthread_mutex_destroy(&vmem->allocation_lock);
+
 	return true;
 }
 
 bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 						   VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
 						   struct VulkanBuffer **struct_buff) {
+	// Get lock
+	pthread_mutex_lock(&vmem->allocation_lock);
+
 	if (enable_validation_layers) {
-		printf("Creating GPU buffer...\n");
+		printf("Creating GPU buffer... size = %llu\n", buff_size);
 	}
 
 	// Check size
@@ -167,6 +183,11 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 
 	*struct_buff = new_buff;
 
+	// Unlock
+	pthread_mutex_unlock(&vmem->allocation_lock);
+
+	printf("GPU buffer created: %p\n", (*struct_buff)->buffer);
+
 	return true;
 }
 
@@ -175,6 +196,9 @@ bool vkmemory_destroybuffer(struct VulkanMemory *vmem, struct VulkanBuffer *stru
 		fprintf(stderr, "NULL values passed into destroy buffer function.\n");
 		return true;
 	}
+
+	// Get lock
+	pthread_mutex_lock(&vmem->allocation_lock);
 
 	// Find spot of GPU memory
 	struct VulkanAllocation *curr = struct_buff->allocation;
@@ -207,6 +231,10 @@ bool vkmemory_destroybuffer(struct VulkanMemory *vmem, struct VulkanBuffer *stru
 
 			// Free allocated buffer struct
 			free(bcurr);
+			bcurr = NULL;
+
+			// Unlock before return
+			pthread_mutex_unlock(&vmem->allocation_lock);
 
 			return true;
 		}
@@ -214,6 +242,9 @@ bool vkmemory_destroybuffer(struct VulkanMemory *vmem, struct VulkanBuffer *stru
 		bprev = bcurr;
 		bcurr = bcurr->next;
 	}
+
+	// Unlock before returning failure
+	pthread_mutex_unlock(&vmem->allocation_lock);
 
 	fprintf(stderr, "Could not find buffer in allocated memory lists.\n");
 	return false;

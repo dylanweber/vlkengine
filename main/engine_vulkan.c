@@ -71,22 +71,6 @@ bool vulkan_init(struct Application *app) {
 		fprintf(stderr, "Failure to create pipeline.\n");
 		return false;
 	}
-
-	// Set up GPU memory allocation
-	ret = vkmemory_init(&app->vulkan_data->vmemory, app->vulkan_data->physical_device,
-						app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0],
-						app->vulkan_data->qf_indices.transfer_indices[0]);
-	if (ret == false) {
-		fprintf(stderr, "Failure to create GPU memory allocator.\n");
-		return false;
-	}
-
-	// Create vertex buffers
-	ret = vulkan_createvertexbuffers(app);
-	if (ret == false) {
-		fprintf(stderr, "Failure to create vertex buffers.\n");
-		return false;
-	}
 	// Create framebuffers
 	ret = vulkan_createframebuffers(app);
 	if (ret == false) {
@@ -109,6 +93,15 @@ bool vulkan_init(struct Application *app) {
 	ret = vulkan_createsynchronization(app);
 	if (ret == false) {
 		fprintf(stderr, "Failure making sempahores.\n");
+		return false;
+	}
+
+	// Set up GPU memory allocation
+	ret = vkmemory_init(&app->vulkan_data->vmemory, app->vulkan_data->physical_device,
+						app->vulkan_data->device, app->vulkan_data->qf_indices.graphics_indices[0],
+						app->vulkan_data->qf_indices.transfer_indices[0]);
+	if (ret == false) {
+		fprintf(stderr, "Failure to create GPU memory allocator.\n");
 		return false;
 	}
 
@@ -251,7 +244,7 @@ bool vulkan_createinstance(struct Application *app) {
 										VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		debug_create_info.pfnUserCallback = vulkan_debugcallback;
 		debug_create_info.pUserData = app;
-		debug_create_info.pNext = &debug_create_info;
+		// create_info.pNext = &debug_create_info;
 	} else {
 		create_info.enabledLayerCount = 0;
 	}
@@ -336,7 +329,7 @@ struct SwapChainSupportDetails vulkan_getswapchainsupport(struct Application *ap
 	if (details.format_count != 0) {
 		details.formats = malloc(sizeof(*details.formats) * details.format_count);
 		if (details.formats == NULL) {
-			fprintf(stderr, "Failure to allocate memory.\n");
+			fprintf(stderr, "Failure to allocate memory. Line: #%d.\n", __LINE__);
 			return details;
 		}
 
@@ -350,7 +343,7 @@ struct SwapChainSupportDetails vulkan_getswapchainsupport(struct Application *ap
 	if (details.present_mode_count != 0) {
 		details.present_modes = malloc(sizeof(*details.present_modes) * details.present_mode_count);
 		if (details.present_modes == NULL) {
-			fprintf(stderr, "Failure to allocate memory.\n");
+			fprintf(stderr, "Failure to allocate memory. Line: #%d.\n", __LINE__);
 			return details;
 		}
 
@@ -560,7 +553,7 @@ bool vulkan_pickdevice(struct Application *app) {
 	// Allocate array to store devices
 	VkPhysicalDevice *physical_devices = malloc(sizeof(*physical_devices) * device_count);
 	if (physical_devices == NULL) {
-		fprintf(stderr, "Failure to allocate memory.\n");
+		fprintf(stderr, "Failure to allocate memory. Line: #%d.\n", __LINE__);
 		return false;
 	}
 
@@ -595,7 +588,6 @@ bool vulkan_pickdevice(struct Application *app) {
 
 		if (!device_features.geometryShader ||
 			!vulkan_devicesupportsextensions(physical_devices[i])) {
-			score = 0;
 			continue;
 		}
 
@@ -667,8 +659,10 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->qf_indices.graphics_indices[i])
+				app->vulkan_data->qf_indices.graphics_indices[i]) {
+				queue_create_infos[j].queueCount++;
 				break;
+			}
 		}
 	}
 	for (i = 0; i < app->vulkan_data->qf_indices.present_count; i++) {
@@ -685,8 +679,10 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 			}
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->qf_indices.present_indices[i])
+				app->vulkan_data->qf_indices.present_indices[i]) {
+				queue_create_infos[j].queueCount++;
 				break;
+			}
 		}
 	}
 	for (i = 0; i < app->vulkan_data->qf_indices.transfer_count; i++) {
@@ -704,8 +700,10 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 
 			// If match is found, go to next index
 			if (queue_create_infos[j].queueFamilyIndex ==
-				app->vulkan_data->qf_indices.transfer_indices[i])
+				app->vulkan_data->qf_indices.transfer_indices[i]) {
+				queue_create_infos[j].queueCount++;
 				break;
+			}
 		}
 	}
 
@@ -1235,7 +1233,7 @@ bool vulkan_createcommandpools(struct Application *app) {
 
 	VkCommandPoolCreateInfo tfr_pool_info = {0};
 	tfr_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	tfr_pool_info.queueFamilyIndex = qf_indices.graphics_indices[0];  // Assume first graphics index
+	tfr_pool_info.queueFamilyIndex = qf_indices.transfer_indices[0];  // Assume first transfer index
 	tfr_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	ret = vkCreateCommandPool(app->vulkan_data->device, &tfr_pool_info, NULL,
@@ -1297,9 +1295,89 @@ bool vulkan_createcommandbuffers(struct Application *app) {
 	return true;
 }
 
-bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, VkFramebuffer frame,
-							   struct RenderGroup *render_group) {
+bool vulkan_recordobjgrp(struct Application *app, VkCommandBuffer buff, VkFramebuffer frame,
+						 struct ObjectGroup *obj_grp) {
 	VkCommandBufferBeginInfo begin_info = {0};
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	// Reset command buffer
+	VkCommandBufferResetFlagBits reset_bits = 0;
+	vkResetCommandBuffer(buff, reset_bits);
+
+	VkResult ret = vkBeginCommandBuffer(buff, &begin_info);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to begin recording to command buffer.\n");
+		return false;
+	}
+
+	VkRenderPassBeginInfo renderpass_info = {0};
+	renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderpass_info.renderPass = app->vulkan_data->render_pass;
+	renderpass_info.framebuffer = frame;
+	renderpass_info.renderArea.offset = (VkOffset2D){0, 0};
+	renderpass_info.renderArea.extent = app->vulkan_data->swapchain_extent;
+
+	VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+	renderpass_info.clearValueCount = 1;
+	renderpass_info.pClearValues = &clear_color;
+
+	vkCmdBeginRenderPass(buff, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+	struct EngineObjectAllocation *curr = NULL;
+
+	uint32_t i;
+	for (i = 0; i < NUM_PIPELINES; i++) {
+		curr = obj_grp->pipelines[i].allocations;
+		if (curr == NULL) {
+			continue;
+		}
+
+		switch (i) {
+			case NO_PIPELINE:
+				break;
+			case PIPELINE_2D:
+				vkCmdBindPipeline(buff, VK_PIPELINE_BIND_POINT_GRAPHICS,
+								  app->vulkan_data->pipeline2d);
+
+				vulkan_recordallocationlist(app, buff, curr);
+				break;
+			case PIPELINE_3D:
+				break;
+			default:
+				break;
+		}
+	}
+
+	vkCmdEndRenderPass(buff);
+	ret = vkEndCommandBuffer(buff);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failed to record command buffer.\n");
+		return false;
+	}
+
+	return true;
+}
+
+void vulkan_recordallocationlist(struct Application *app, VkCommandBuffer buff,
+								 struct EngineObjectAllocation *curr) {
+	int i;
+
+	while (curr != NULL) {
+		for (i = 0; i < curr->objects_size; i++) {
+			VkDeviceSize offset = 0;
+			vkCmdBindVertexBuffers(buff, 0, 1, &curr->objects[i].render_data.vi_buffer->buffer,
+								   &offset);
+			vkCmdDraw(buff, curr->objects[i].render_data.vertices_size, 1, 0, 0);
+			printf("Vertex buffer: %p\n", curr->objects[i].render_data.vi_buffer->buffer);
+			printf("Vertex size: %llu\n", curr->objects[i].render_data.vertices_size);
+		}
+
+		curr = curr->next;
+	}
+}
+
+/* bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, VkFramebuffer
+frame, struct RenderGroup *render_group) { VkCommandBufferBeginInfo begin_info = {0};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 	// Reset command buffer
@@ -1366,7 +1444,7 @@ bool vulkan_recorddrawcommands(struct Application *app, VkCommandBuffer buff, Vk
 	}
 
 	return true;
-}
+} */
 
 bool vulkan_createsynchronization(struct Application *app) {
 	app->vulkan_data->imgs_in_flight =
@@ -1410,7 +1488,7 @@ bool vulkan_createsynchronization(struct Application *app) {
 	return true;
 }
 
-bool vulkan_createvertexbuffers(struct Application *app) {
+/* bool vulkan_createvertexbuffers(struct Application *app) {
 	struct RenderPipelineLink *curr =
 		pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
 
@@ -1438,100 +1516,51 @@ bool vulkan_createvertexbuffers(struct Application *app) {
 	}
 
 	return true;
-}
+} */
 
-/*bool vulkan_createvertexbuffers(struct Application *app) {
-	// Create a vertex buffer for every game object
-	struct RenderPipelineLink *curr =
-		pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
-	uint32_t mem_type_bits = 0;
+bool vulkan_copybuffer(struct Application *app, struct VulkanMemory *vmem, struct VulkanBuffer *src,
+					   struct VulkanBuffer *dest, VkDeviceSize size, VkDeviceSize offset) {
+	// Get transfer command buffer
+	VkCommandBuffer buff = app->vulkan_data->tfr_command_buffers[0];
 
-	while (curr != NULL) {
-		// Create buffer
-		VkBufferCreateInfo buffer_info = {0};
+	// Reset command buffer
+	VkCommandBufferResetFlagBits reset_bits = 0;
+	vkResetCommandBuffer(buff, reset_bits);
 
-		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		buffer_info.size =
-			sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size;
-		buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		buffer_info.flags = 0;
+	// Start and record command buffer
+	VkCommandBufferBeginInfo begin_info = {0};
+	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-		if (vkCreateBuffer(app->vulkan_data->device, &buffer_info, NULL,
-						   &curr->render_object->vertex_buffer) != VK_SUCCESS) {
-			fprintf(stderr, "Failure creating vertex buffer.\n");
-			return false;
-		}
-
-		if (enable_validation_layers) {
-			printf("Created vertex buffer @ 0x%p\n", curr->render_object->vertex_buffer);
-		}
-
-		// Get memory requirements
-		VkMemoryRequirements mem_requirements;
-		vkGetBufferMemoryRequirements(app->vulkan_data->device, curr->render_object->vertex_buffer,
-									  &mem_requirements);
-		mem_type_bits |= mem_requirements.memoryTypeBits;
-		curr->render_object->vertex_alignment = mem_requirements.alignment;
-
-		// Calculate vertex buffer size considering alignment
-		app->vulkan_data->vertex_memory_size +=
-			mem_requirements.alignment *
-			((sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size) /
-				 mem_requirements.alignment +
-			 1);
-
-		curr = curr->next;
-	}
-
-	// Allocate memory
-	VkMemoryAllocateInfo alloc_info = {0};
-
-	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	alloc_info.allocationSize = app->vulkan_data->vertex_memory_size;
-	alloc_info.memoryTypeIndex = vulkan_findmemorytype(app, mem_type_bits,
-													   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-														   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	if (vkAllocateMemory(app->vulkan_data->device, &alloc_info, NULL,
-						 &app->vulkan_data->vertex_buffer_memory) != VK_SUCCESS) {
-		fprintf(stderr, "Failure to allocate physical memory.\n");
+	VkResult ret = vkBeginCommandBuffer(buff, &begin_info);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure to begin recording to command buffer.\n");
 		return false;
 	}
 
-	app->vulkan_data->allocated_memory_size += app->vulkan_data->vertex_memory_size;
+	VkBufferCopy copy_region = {0};
+	copy_region.srcOffset = 0;
+	copy_region.dstOffset = offset;
+	copy_region.size = size;
 
-	// Bind buffers to memory
-	VkDeviceSize memory_offset = 0;
-	curr = pipelinelink_gethead(app->render_group->pipelines, PIPELINE_2D);
+	vkCmdCopyBuffer(buff, src->buffer, dest->buffer, 1, &copy_region);
+	vkEndCommandBuffer(buff);
 
-	while (curr != NULL) {
-		vkBindBufferMemory(app->vulkan_data->device, curr->render_object->vertex_buffer,
-						   app->vulkan_data->vertex_buffer_memory, memory_offset);
+	// Submit command buffer to queue
+	VkSubmitInfo submit_info = {0};
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.commandBufferCount = 1;
+	submit_info.pCommandBuffers = &buff;
 
-		if (enable_validation_layers) {
-			printf("Binded vertex buffer @ 0x%p\n", curr->render_object->vertex_buffer);
-		}
-
-		// Copy vertices into vertex memory map
-		void *buffer_data;
-		vkMapMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory, memory_offset,
-					curr->render_object->vertices_size, 0, &buffer_data);
-		memcpy(buffer_data, curr->render_object->vertices,
-			   curr->render_object->vertices_size * sizeof(*curr->render_object->vertices));
-		vkUnmapMemory(app->vulkan_data->device, app->vulkan_data->vertex_buffer_memory);
-
-		memory_offset +=
-			curr->render_object->vertex_alignment *
-			((sizeof(*curr->render_object->vertices) * curr->render_object->vertices_size) /
-				 curr->render_object->vertex_alignment +
-			 1);
-
-		curr = curr->next;
+	ret = vkQueueSubmit(app->vulkan_data->transfer_queue, 1, &submit_info, NULL);
+	if (ret != VK_SUCCESS) {
+		fprintf(stderr, "Failure submitting transfer queue.\n");
+		return false;
 	}
+	vkQueueWaitIdle(app->vulkan_data->transfer_queue);
 
 	return true;
-}*/
+}
 
 uint32_t vulkan_findmemorytype(struct Application *app, uint32_t type_filter,
 							   VkMemoryPropertyFlags properties) {
@@ -1577,9 +1606,8 @@ bool vulkan_drawframe(struct Application *app) {
 		app->vulkan_data->in_flight_fen[app->vulkan_data->current_frame];
 
 	// Rerecord command buffers
-	vulkan_recorddrawcommands(app, app->vulkan_data->gfx_command_buffers[image_index],
-							  app->vulkan_data->swapchain_framebuffers[image_index],
-							  app->render_group);
+	vulkan_recordobjgrp(app, app->vulkan_data->gfx_command_buffers[image_index],
+						app->vulkan_data->swapchain_framebuffers[image_index], app->object_group);
 
 	// Submit command buffer for presentation
 	VkPipelineStageFlags wait_stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1621,7 +1649,6 @@ bool vulkan_drawframe(struct Application *app) {
 		app->vulkan_data->framebuffer_resized == true) {
 		app->vulkan_data->framebuffer_resized = false;
 		vulkan_recreateswapchain(app);
-		return true;
 	} else if (ret != VK_SUCCESS) {
 		fprintf(stderr, "Failure to present swapchain image.\n");
 	}
@@ -1668,7 +1695,10 @@ struct ShaderFile vulkan_readshaderfile(const char *filename) {
 }
 
 void vulkan_destroyshaderfile(struct ShaderFile shaderfile) {
-	free(shaderfile.data);
+	if (shaderfile.data != NULL) {
+		free(shaderfile.data);
+	}
+	shaderfile.data = NULL;
 }
 
 VkShaderModule vulkan_createshadermodule(struct Application *app, struct ShaderFile shaderfile) {
