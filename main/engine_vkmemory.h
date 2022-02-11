@@ -1,6 +1,6 @@
+#include "GLFW/glfw3.h"
 #include "application.h"
 #include "config.h"
-#include "glfw/glfw3.h"
 
 #include <assert.h>
 #include <pthread.h>

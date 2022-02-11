@@ -1,4 +1,4 @@
-#include "glfw/glfw3.h"
+#include "GLFW/glfw3.h"
 
 #ifndef OBJECTS_H
 #define OBJECTS_H
@@ -6,16 +6,16 @@
 enum PipelineType { NO_PIPELINE, PIPELINE_2D, PIPELINE_3D, NUM_PIPELINES };
 
 union UniformData {
-	struct u2d {
+	struct {
 		float translate[4];
 		float rotation[4];
 		float scale[4];
-	};
-	struct u3d {
+	} u2d;
+	struct {
 		float model[16];
 		float view[16];
 		float projection[16];
-	};
+	} u3d;
 };
 
 /*

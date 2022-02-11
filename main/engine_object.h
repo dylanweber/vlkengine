@@ -1,7 +1,7 @@
 #include "application.h"
 #include "engine_vertex.h"
 #include "engine_vulkan.h"
-#include "glfw/glfw3.h"
+#include "GLFW/glfw3.h"
 #include "object_struct.h"
 
 #include <assert.h>

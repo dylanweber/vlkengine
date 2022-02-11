@@ -1,8 +1,8 @@
+#include "GLFW/glfw3.h"
 #include "application.h"
 #include "config.h"
 #include "engine_vertex.h"
 #include "engine_vkmemory.h"
-#include "glfw/glfw3.h"
 #include "hashdata.h"
 #include "object_struct.h"
 

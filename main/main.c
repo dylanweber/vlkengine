@@ -1,8 +1,8 @@
+#include "GLFW/glfw3.h"
 #include "application.h"
 #include "config.h"
 #include "engine_object.h"
 #include "engine_vulkan.h"
-#include "glfw/glfw3.h"
 
 #include <stdbool.h>
 #include <stdio.h>
