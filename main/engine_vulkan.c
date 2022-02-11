@@ -244,7 +244,7 @@ bool vulkan_createinstance(struct Application *app) {
 										VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		debug_create_info.pfnUserCallback = vulkan_debugcallback;
 		debug_create_info.pUserData = app;
-		// create_info.pNext = &debug_create_info;
+		create_info.pNext = &debug_create_info;
 	} else {
 		create_info.enabledLayerCount = 0;
 	}
@@ -1368,8 +1368,8 @@ void vulkan_recordallocationlist(struct Application *app, VkCommandBuffer buff,
 			vkCmdBindVertexBuffers(buff, 0, 1, &curr->objects[i].render_data.vi_buffer->buffer,
 								   &offset);
 			vkCmdDraw(buff, curr->objects[i].render_data.vertices_size, 1, 0, 0);
-			printf("Vertex buffer: %p\n", curr->objects[i].render_data.vi_buffer->buffer);
-			printf("Vertex size: %llu\n", curr->objects[i].render_data.vertices_size);
+			// printf("Vertex buffer: %p\n", curr->objects[i].render_data.vi_buffer->buffer);
+			// printf("Vertex size: %llu\n", curr->objects[i].render_data.vertices_size);
 		}
 
 		curr = curr->next;

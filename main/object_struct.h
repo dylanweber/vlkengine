@@ -1,5 +1,8 @@
 #include "GLFW/glfw3.h"
 
+#include <pthread.h>
+#include <stdbool.h>
+
 #ifndef OBJECTS_H
 #define OBJECTS_H
 

@@ -178,6 +178,11 @@ bool vkmemory_createbuffer(struct VulkanMemory *vmem, VkDeviceSize buff_size,
 		new_buff = curr->buffers = vkmemory_createbufferstruct(buff, curr, buff_size, 0, buff_size);
 	}
 
+	if (new_buff == NULL) {
+		fprintf(stderr, "Memory allocation failure in vkmemory_createbuffer.\n");
+		return false;
+	}
+
 	// Bind buffer to memory
 	vkBindBufferMemory(vmem->device, new_buff->buffer, new_buff->allocation->mem, new_buff->start);
 
