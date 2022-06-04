@@ -365,7 +365,7 @@ inline bool vulkan_compareextensions(VkExtensionProperties *extensions, uint32_t
 	struct HashSet *set = hashset_create(VULKAN_HASHSET_SIZE);
 
 	bool flag = true;
-	int i;
+	size_t i;
 	for (i = 0; i < extensions_size; i++) {
 		hashset_store(set, extensions[i].extensionName);
 	}
@@ -404,7 +404,7 @@ bool vulkan_checkvalidationlayers() {
 	struct HashSet *set = hashset_create(VULKAN_HASHSET_SIZE);
 
 	bool flag = true;
-	int i;
+	size_t i;
 	for (i = 0; i < layer_count; i++) {
 		hashset_store(set, available_layers[i].layerName);
 	}
@@ -566,7 +566,7 @@ bool vulkan_pickdevice(struct Application *app) {
 
 	// Determine most suitable device
 	printf("Found GPUs:\n");
-	int i;
+	size_t i;
 	uint32_t score, max_score = 0;
 	VkPhysicalDeviceProperties device_properties;
 	VkPhysicalDeviceFeatures device_features;
@@ -644,7 +644,7 @@ bool vulkan_createlogicaldevice(struct Application *app) {
 	float queue_priority = 1.0f;
 
 	// Go through every graphics/present/transfer index and add to queue_create_infos if not found
-	int i, j;
+	size_t i, j;
 	for (i = 0; i < app->vulkan_data->qf_indices.graphics_count; i++) {
 		for (j = 0; j <= queue_create_infos_size; j++) {
 			// If at end of queue_create_infos array, add new element
@@ -1360,7 +1360,7 @@ bool vulkan_recordobjgrp(struct Application *app, VkCommandBuffer buff, VkFrameb
 
 void vulkan_recordallocationlist(struct Application *app, VkCommandBuffer buff,
 								 struct EngineObjectAllocation *curr) {
-	int i;
+	size_t i;
 
 	while (curr != NULL) {
 		for (i = 0; i < curr->objects_size; i++) {

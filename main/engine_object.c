@@ -81,7 +81,7 @@ bool objgrp_processqueue(struct ObjectGroup *obj_grp, struct Application *app) {
 		struct ObjectGroupQueue *prev, *curr = obj_grp->queue[pltype];
 		VkDeviceSize buffer_size = 0;
 		union HashTableValue val;
-		int i = 0;
+		size_t i = 0;
 
 		while (curr != NULL) {
 			// Create object & put on allocated array
@@ -120,7 +120,7 @@ bool objgrp_processqueue(struct ObjectGroup *obj_grp, struct Application *app) {
 		// Assign buffer data to each object, copy data
 		struct VulkanBuffer *temp_buff;
 		VkDeviceSize v_offset = 0;
-		int j;
+		size_t j;
 
 		for (j = 0; j < allocation->objects_size; j++) {
 			printf("Setting object buffer to %p\n", obj_buffer->buffer);
@@ -189,7 +189,7 @@ bool objgrp_destroy(struct ObjectGroup *objgrp) {
 			prev = curr;
 			curr = curr->next;
 
-			int i;
+			size_t i;
 			for (i = 0; i < prev->objects_size; i++) {
 				object_destroy(&prev->objects[i]);
 			}

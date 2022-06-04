@@ -15,7 +15,22 @@ add_custom_target(
 		shaders ALL
 )
 
-foreach(SOURCE ${SOURCES})
+if (CMAKE_GENERATOR MATCHES "Visual Studio")
+	foreach(SOURCE ${SOURCES})
+	get_filename_component(FULL_NAME ${SOURCE} NAME)
+	add_custom_command(
+		TARGET shaders POST_BUILD
+		DEPENDS ${SOURCE}
+		COMMAND
+			${GLSLC}
+			-o ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.spv
+			--target-env=vulkan1.1
+			${SOURCE}
+		COMMENT "Compiling ${FULL_NAME}"
+	)
+	endforeach()
+else()
+	foreach(SOURCE ${SOURCES})
 	get_filename_component(FULL_NAME ${SOURCE} NAME)
 	add_custom_command(
 		TARGET shaders POST_BUILD
@@ -29,4 +44,5 @@ foreach(SOURCE ${SOURCES})
 		DEPFILE  ${CMAKE_CURRENT_BINARY_DIR}/${FULL_NAME}.d
 		COMMENT "Compiling ${FULL_NAME}"
 	)
-endforeach()
+	endforeach()
+endif()
